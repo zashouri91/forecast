@@ -393,6 +393,17 @@ select:focus,input:focus{border-color:#4338CA;box-shadow:0 0 0 3px rgba(67,56,20
 .action-bar{background:white;border-top:1px solid #E2E8F0;padding:14px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;bottom:0;z-index:100}
 .hidden{display:none!important}.text-muted{color:#64748B;font-size:13px}
 .empty-state{text-align:center;padding:44px;color:#94A3B8}
+.dash-tabs{display:flex;gap:6px;margin-bottom:20px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.dash-tab{display:flex;align-items:center;gap:6px;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:white;color:#64748B;border:1px solid #E2E8F0;white-space:nowrap;transition:all .15s;outline:none}
+.dash-tab:hover{color:#1E293B;border-color:#CBD5E1}
+.dash-tab:focus-visible{box-shadow:0 0 0 3px rgba(67,56,202,.18)}
+.dash-tab.active{background:#4338CA;color:white;border-color:#4338CA}
+.dash-tab-count{font-size:11px;opacity:.75;font-weight:500;background:rgba(0,0,0,.06);padding:1px 7px;border-radius:10px}
+.dash-tab.active .dash-tab-count{background:rgba(255,255,255,.18)}
+.sortable-th{cursor:pointer;user-select:none}
+.sortable-th:hover{color:#1E293B}
+.sortable-th.sorted{color:#4338CA}
+@media (max-width:720px){.dash-tab{padding:8px 12px;font-size:12px}.dash-tab-count{display:none}}
 </style>
 </head>
 <body>
@@ -456,6 +467,8 @@ const state = { step:1, files:[], records:[] };
 const filterState = { sites:new Set(['all']), regions:new Set(['all']), cms:new Set(['all']), rtypes:new Set(['all']), statuses:new Set(['all']) };
 let charts = {};
 let heatmapMode = 'count'; // 'count' | 'pct_primary_seats' | 'pct_expected_usage' | 'vs_tt_baseline'
+let activeTab = 'overview';
+const tableSort = { workspace:{col:0,dir:1}, meetings:{col:0,dir:1}, events:{col:0,dir:1} };
 
 const STANDARD_FIELDS = [
   {key:'site',label:'Site / Location',required:true},
@@ -854,6 +867,21 @@ function applyMappings() {
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
 const COLORS=['#4338CA','#06B6D4','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16','#F43F5E'];
 
+const TABS = [
+  { id:'overview',  label:'Overview',               icon:'📊', scope:()=>true },
+  { id:'workspace', label:'Workspace Reservations', icon:'🪑', scope:r=>r._type==='space'||r._type==='traveler' },
+  { id:'meetings',  label:'Meetings',               icon:'📅', scope:r=>r._type==='meeting' },
+  { id:'events',    label:'Events',                 icon:'🎯', scope:r=>r._type==='event' },
+];
+// Which filter groups are visible per tab. Hidden chips still apply if previously set
+// (user can press Clear Filters to reset).
+const TAB_FILTERS = {
+  overview:  { site:1, region:1, cm:1, status:0 },
+  workspace: { site:1, region:1, cm:1, status:0 },
+  meetings:  { site:1, region:1, cm:1, status:0 },
+  events:    { site:1, region:1, cm:1, status:1 },
+};
+
 function todayStr() {
   const d=new Date(); d.setHours(0,0,0,0);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -867,8 +895,9 @@ function renderDashboard() {
   const sites=getAllSiteNames();
   const regions=getAllRegionalLeaders();
   const cms=getAllCMs();
-  const types=[...new Set(state.records.map(r=>r._type).filter(Boolean))].sort();
   const statuses=[...new Set(state.records.map(r=>r.status).filter(Boolean))].sort();
+  const tabCounts = {};
+  TABS.forEach(t => { tabCounts[t.id] = state.records.filter(t.scope).length; });
 
   document.getElementById('dashboard-content').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;flex-wrap:wrap;gap:14px">
@@ -879,78 +908,88 @@ function renderDashboard() {
         <button class="btn btn-sm btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
       </div>
     </div>
+    <div class="dash-tabs" role="tablist" aria-label="Dashboard sections">
+      ${TABS.map(t=>`<button class="dash-tab${t.id===activeTab?' active':''}" data-tab="${t.id}" role="tab" aria-selected="${t.id===activeTab}" tabindex="${t.id===activeTab?'0':'-1'}" onclick="setTab('${t.id}')" onkeydown="onTabKey(event,'${t.id}')">
+        <span>${t.icon}</span><span>${t.label}</span><span class="dash-tab-count">${tabCounts[t.id].toLocaleString()}</span>
+      </button>`).join('')}
+    </div>
     <div class="dashboard-layout">
       <div>
         <div class="filters-panel">
           <div class="filters-title">🔽 Filters</div>
-          <div class="filter-group">
+          <div class="filter-group" id="fg-sites">
             <div class="filter-label">Site</div>
             <div class="filter-chips" id="fc-sites">
               <span class="chip active" onclick="toggleChip(this,'site','all')">All</span>
-              ${sites.map(s=>`<span class="chip" onclick="toggleChip(this,'site','${s.replace(/'/g,"\\'")}')">  ${s}</span>`).join('')}
+              ${sites.map(s=>`<span class="chip${filterState.sites.has(s)?' active':''}" onclick="toggleChip(this,'site','${s.replace(/'/g,"\\'")}')">  ${s}</span>`).join('')}
             </div>
           </div>
-          ${regions.length ? `<div class="filter-group">
+          ${regions.length ? `<div class="filter-group" id="fg-regions">
             <div class="filter-label">Region (RL)</div>
             <div class="filter-chips" id="fc-regions">
               <span class="chip active" onclick="toggleChip(this,'region','all')">All</span>
-              ${regions.map(r=>`<span class="chip" onclick="toggleChip(this,'region','${r.replace(/'/g,"\\'")}')">  ${r}</span>`).join('')}
+              ${regions.map(r=>`<span class="chip${filterState.regions.has(r)?' active':''}" onclick="toggleChip(this,'region','${r.replace(/'/g,"\\'")}')">  ${r}</span>`).join('')}
             </div>
           </div>` : ''}
-          <div class="filter-group">
+          <div class="filter-group" id="fg-cms">
             <div class="filter-label">CM Captain</div>
             <div class="filter-chips" id="fc-cms">
               <span class="chip active" onclick="toggleChip(this,'cm','all')">All</span>
-              ${cms.slice(0,40).map(c=>`<span class="chip" onclick="toggleChip(this,'cm','${c.replace(/'/g,"\\'")}')">  ${c}</span>`).join('')}
+              ${cms.slice(0,40).map(c=>`<span class="chip${filterState.cms.has(c)?' active':''}" onclick="toggleChip(this,'cm','${c.replace(/'/g,"\\'")}')">  ${c}</span>`).join('')}
             </div>
           </div>
-          <div class="filter-group">
-            <div class="filter-label">Record Type</div>
-            <div class="filter-chips" id="fc-rtypes">
-              <span class="chip active" onclick="toggleChip(this,'rtype','all')">All</span>
-              ${types.map(t=>`<span class="chip" onclick="toggleChip(this,'rtype','${t}')">  ${t}</span>`).join('')}
-            </div>
-          </div>
-          <div class="filter-group">
+          <div class="filter-group" id="fg-statuses">
             <div class="filter-label">Status</div>
             <div class="filter-chips" id="fc-statuses">
               <span class="chip active" onclick="toggleChip(this,'status','all')">All</span>
-              ${statuses.slice(0,12).map(s=>`<span class="chip" onclick="toggleChip(this,'status','${s.replace(/'/g,"\\'")}')">  ${s}</span>`).join('')}
+              ${statuses.slice(0,12).map(s=>`<span class="chip${filterState.statuses.has(s)?' active':''}" onclick="toggleChip(this,'status','${s.replace(/'/g,"\\'")}')">  ${s}</span>`).join('')}
             </div>
           </div>
           <button class="btn btn-sm btn-secondary" style="width:100%;justify-content:center;margin-top:4px" onclick="clearFilters()">✕ Clear Filters</button>
         </div>
       </div>
-      <div>
-        <div class="summary-grid" id="sum-cards"></div>
-        <div class="charts-grid">
-          <div class="chart-card"><div class="chart-title">📅 Volume by Week</div><div class="chart-container"><canvas id="ch-weekly"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title">👤 CM Workload</div><div class="chart-container"><canvas id="ch-cm"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title">🏢 By Site</div><div class="chart-container"><canvas id="ch-site"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title">📊 Status Mix</div><div class="chart-container"><canvas id="ch-status"></canvas></div></div>
-        </div>
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-header">
-            <div class="card-title">🔥 CM Busyness — Daily Load (next 6 weeks)</div>
-            ${REF() ? `<select id="heatmap-mode" onchange="setHeatmapMode(this.value)" style="width:auto;max-width:260px;font-size:11px">
-              <option value="count"${heatmapMode==='count'?' selected':''}>Show: Raw count</option>
-              <option value="pct_primary_seats"${heatmapMode==='pct_primary_seats'?' selected':''}>Show: % of Primary Seats</option>
-              <option value="pct_expected_usage"${heatmapMode==='pct_expected_usage'?' selected':''}>Show: % of Expected Daily Usage</option>
-              <option value="vs_tt_baseline"${heatmapMode==='vs_tt_baseline'?' selected':''}>Show: % of Avg Tues-Thurs Badge</option>
-            </select>` : ''}
-          </div>
-          <div class="card-body" id="heatmap-wrap" style="overflow-x:auto"></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">📋 Upcoming Records</div><div id="tbl-count" class="text-muted"></div></div>
-          <div style="max-height:520px;overflow-y:auto">
-            <table class="upcoming-table"><thead><tr><th>Date</th><th>Site</th><th>Event / Meeting</th><th>CM Captain</th><th>Attendees</th><th>Status</th><th>Type</th><th>Time</th><th>Room</th></tr></thead>
-            <tbody id="tbl-body"></tbody></table>
-          </div>
-        </div>
-      </div>
+      <div id="tab-panel"><!-- per-tab content goes here --></div>
     </div>`;
+  applyTabFilterVisibility();
   refreshDash();
+}
+
+function applyTabFilterVisibility() {
+  const cfg = TAB_FILTERS[activeTab] || TAB_FILTERS.overview;
+  const map = { site:'fg-sites', region:'fg-regions', cm:'fg-cms', status:'fg-statuses' };
+  Object.entries(map).forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = cfg[k] ? '' : 'none';
+  });
+}
+
+function setTab(id) {
+  if (!TABS.find(t => t.id === id) || id === activeTab) {
+    document.querySelector(`.dash-tab[data-tab="${id}"]`)?.focus();
+    return;
+  }
+  activeTab = id;
+  document.querySelectorAll('.dash-tab').forEach(el => {
+    const on = el.dataset.tab === id;
+    el.classList.toggle('active', on);
+    el.setAttribute('aria-selected', on ? 'true' : 'false');
+    el.setAttribute('tabindex', on ? '0' : '-1');
+    if (on) el.focus();
+  });
+  applyTabFilterVisibility();
+  refreshDash();
+}
+
+function onTabKey(e, id) {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+  e.preventDefault();
+  const i = TABS.findIndex(t => t.id === id);
+  let next = i;
+  if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+  else if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = TABS.length - 1;
+  setTab(TABS[next].id);
 }
 
 function toggleChip(el, dim, val) {
@@ -985,67 +1024,324 @@ function getFiltered() {
   return state.records.filter(r=>{
     if(from&&r.date&&r.date<from) return false;
     if(to&&r.date&&r.date>to) return false;
-    // sites filter matches canonical OR raw value
     if(!filterState.sites.has('all') && !filterState.sites.has(r._canonicalSite) && !filterState.sites.has(r.site)) return false;
     if(!filterState.regions.has('all') && !filterState.regions.has(r._regionalLeader)) return false;
     if(!filterState.cms.has('all')&&!filterState.cms.has(r.cm_captain)) return false;
-    if(!filterState.rtypes.has('all')&&!filterState.rtypes.has(r._type)) return false;
     if(!filterState.statuses.has('all')&&!filterState.statuses.has(r.status)) return false;
     return true;
   });
 }
 
-function setHeatmapMode(m) { heatmapMode = m; updateHeatmap(getFiltered()); }
+function getTabFiltered() {
+  const t = TABS.find(x => x.id === activeTab) || TABS[0];
+  return getFiltered().filter(t.scope);
+}
+
+function setHeatmapMode(m) {
+  heatmapMode = m;
+  if (activeTab === 'overview') updateHeatmap(getTabFiltered());
+}
 
 function refreshDash() {
-  const recs=getFiltered();
-  updateSummary(recs); updateCharts(recs); updateHeatmap(recs); updateTable(recs);
+  Object.values(charts).forEach(c=>c&&c.destroy&&c.destroy()); charts={};
+  const recs = getTabFiltered();
+  const fn = { overview: renderOverview, workspace: renderWorkspace, meetings: renderMeetings, events: renderEvents }[activeTab] || renderOverview;
+  fn(recs);
+  // tab counts in the strip reflect the *unfiltered* tab scope, so don't recompute here
 }
 
-function updateSummary(recs) {
-  const mtg=recs.filter(r=>r._type==='meeting').length;
-  const evt=recs.filter(r=>r._type==='event').length;
-  const trv=recs.filter(r=>r._type==='traveler').length;
-  const att=recs.reduce((s,r)=>s+(r.attendees||0),0);
-  document.getElementById('sum-cards').innerHTML=`
-    <div class="summary-card"><div class="summary-icon">📅</div><div class="summary-label">Meetings</div><div class="summary-value">${mtg.toLocaleString()}</div><div class="summary-sub">in date range</div></div>
-    <div class="summary-card"><div class="summary-icon">🎯</div><div class="summary-label">Events</div><div class="summary-value">${evt.toLocaleString()}</div><div class="summary-sub">planned</div></div>
-    <div class="summary-card"><div class="summary-icon">✈️</div><div class="summary-label">Travelers</div><div class="summary-value">${trv.toLocaleString()}</div><div class="summary-sub">incoming</div></div>
-    <div class="summary-card"><div class="summary-icon">👥</div><div class="summary-label">Total Attendees</div><div class="summary-value">${att.toLocaleString()}</div><div class="summary-sub">across meetings</div></div>`;
+// ── CHART HELPERS ──────────────────────────────────────────────────────────
+function makeBarChart(canvasId, key, labels, data, opts={}) {
+  const c = document.getElementById(canvasId); if (!c) return;
+  if (charts[key]) charts[key].destroy();
+  charts[key] = new Chart(c, {
+    type: opts.type || 'bar',
+    data: { labels, datasets: [{ label: opts.label||'', data, backgroundColor: opts.colors||COLORS, borderRadius:4 }] },
+    options: Object.assign({ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true},x:{ticks:{maxRotation:45}}} }, opts.options||{}),
+  });
+}
+function makeHBarChart(canvasId, key, labels, data) {
+  const c = document.getElementById(canvasId); if (!c) return;
+  if (charts[key]) charts[key].destroy();
+  charts[key] = new Chart(c, {
+    type:'bar',
+    data:{ labels, datasets:[{ data, backgroundColor:COLORS, borderRadius:4 }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} },
+  });
+}
+function makeDonut(canvasId, key, labels, data) {
+  const c = document.getElementById(canvasId); if (!c) return;
+  if (charts[key]) charts[key].destroy();
+  charts[key] = new Chart(c, {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data, backgroundColor:COLORS }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right',labels:{boxWidth:11,font:{size:10}}}} },
+  });
 }
 
-function updateCharts(recs) {
-  // Weekly
-  const wk={};
-  recs.forEach(r=>{ if(!r.date) return; const d=new Date(r.date+'T12:00:00'); if(isNaN(d)) return; const ws=new Date(d); ws.setDate(d.getDate()-d.getDay()); const k=fmtDate(ws.toISOString()); wk[k]=(wk[k]||0)+1; });
-  const wkL=Object.keys(wk).sort().slice(0,20);
-  if(charts.weekly) charts.weekly.destroy();
-  const c1=document.getElementById('ch-weekly');
-  if(c1) charts.weekly=new Chart(c1,{type:'bar',data:{labels:wkL.map(k=>{const d=new Date(k+'T12:00:00');return `${d.toLocaleString('default',{month:'short'})} ${d.getDate()}`;}),datasets:[{label:'Records',data:wkL.map(k=>wk[k]),backgroundColor:'#4338CA',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true},x:{ticks:{maxTicksLimit:10}}}}});
+function countBy(recs, key) {
+  const m={}; recs.forEach(r=>{ const v = typeof key==='function' ? key(r) : r[key]; if (v) m[v]=(m[v]||0)+1; }); return m;
+}
+function weeklyBuckets(recs) {
+  const wk={}; recs.forEach(r=>{ if(!r.date) return; const d=new Date(r.date+'T12:00:00'); if(isNaN(d)) return; const ws=new Date(d); ws.setDate(d.getDate()-d.getDay()); const k=fmtDate(ws.toISOString()); wk[k]=(wk[k]||0)+1; });
+  return Object.keys(wk).sort().slice(0,20).map(k => ({k, v:wk[k], label:(()=>{const d=new Date(k+'T12:00:00'); return `${d.toLocaleString('default',{month:'short'})} ${d.getDate()}`;})()}));
+}
+function monthlyBuckets(recs) {
+  const mo={}; recs.forEach(r=>{ if(!r.date) return; const k = r.date.slice(0,7); mo[k]=(mo[k]||0)+1; });
+  return Object.keys(mo).sort().slice(0,12).map(k => ({k, v:mo[k], label:(()=>{const d=new Date(k+'-15T12:00:00'); return d.toLocaleString('default',{month:'short', year:'2-digit'});})()}));
+}
+function dailyBuckets(recs, days=42) {
+  const today=todayStr();
+  const labels=Array.from({length:days},(_,i)=>addDays(today,i));
+  const counts={}; recs.forEach(r=>{ if(r.date) counts[r.date]=(counts[r.date]||0)+1; });
+  return labels.map(d => ({ k:d, v: counts[d]||0, label: (()=>{const dt=new Date(d+'T12:00:00'); return `${dt.getMonth()+1}/${dt.getDate()}`;})() }));
+}
 
-  // CM
-  const cm={};
-  recs.forEach(r=>{ if(r.cm_captain) cm[r.cm_captain]=(cm[r.cm_captain]||0)+1; });
-  const cmS=Object.entries(cm).sort((a,b)=>b[1]-a[1]).slice(0,12);
-  if(charts.cm) charts.cm.destroy();
-  const c2=document.getElementById('ch-cm');
-  if(c2) charts.cm=new Chart(c2,{type:'bar',data:{labels:cmS.map(([k])=>k),datasets:[{data:cmS.map(([,v])=>v),backgroundColor:COLORS,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}});
+// ── TAB RENDERERS ──────────────────────────────────────────────────────────
+function renderOverview(recs) {
+  const mtg = recs.filter(r => r._type === 'meeting').length;
+  const evt = recs.filter(r => r._type === 'event').length;
+  const rsv = recs.filter(r => r._type === 'space' || r._type === 'traveler').length;
+  const activeCMs = new Set(recs.map(r => r.cm_captain).filter(Boolean)).size;
+  const next7 = nextNDayDigest(recs, 7);
 
-  // Site
-  const si={};
-  recs.forEach(r=>{ if(r.site) si[r.site]=(si[r.site]||0)+1; });
-  const siS=Object.entries(si).sort((a,b)=>b[1]-a[1]);
-  if(charts.site) charts.site.destroy();
-  const c3=document.getElementById('ch-site');
-  if(c3) charts.site=new Chart(c3,{type:'bar',data:{labels:siS.map(([k])=>k),datasets:[{data:siS.map(([,v])=>v),backgroundColor:COLORS,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true},x:{ticks:{maxRotation:45}}}}});
+  document.getElementById('tab-panel').innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card"><div class="summary-icon">📅</div><div class="summary-label">Meetings</div><div class="summary-value">${mtg.toLocaleString()}</div><div class="summary-sub">in date range</div></div>
+      <div class="summary-card"><div class="summary-icon">🎯</div><div class="summary-label">Events</div><div class="summary-value">${evt.toLocaleString()}</div><div class="summary-sub">planned</div></div>
+      <div class="summary-card"><div class="summary-icon">🪑</div><div class="summary-label">Reservations</div><div class="summary-value">${rsv.toLocaleString()}</div><div class="summary-sub">workspaces + travelers</div></div>
+      <div class="summary-card"><div class="summary-icon">👥</div><div class="summary-label">Active CMs</div><div class="summary-value">${activeCMs.toLocaleString()}</div><div class="summary-sub">with records in range</div></div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">🔥 CM Busyness — Daily Load (next 6 weeks, all signals)</div>
+        ${REF() ? `<select id="heatmap-mode" onchange="setHeatmapMode(this.value)" style="width:auto;max-width:260px;font-size:11px">
+          <option value="count"${heatmapMode==='count'?' selected':''}>Show: Raw count</option>
+          <option value="pct_primary_seats"${heatmapMode==='pct_primary_seats'?' selected':''}>Show: % of Primary Seats</option>
+          <option value="pct_expected_usage"${heatmapMode==='pct_expected_usage'?' selected':''}>Show: % of Expected Daily Usage</option>
+          <option value="vs_tt_baseline"${heatmapMode==='vs_tt_baseline'?' selected':''}>Show: % of Avg Tues-Thurs Badge</option>
+        </select>` : ''}
+      </div>
+      <div class="card-body" id="heatmap-wrap" style="overflow-x:auto"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">📋 Next 7 Days at a Glance</div><div class="text-muted">${next7.total.toLocaleString()} records</div></div>
+      <div class="card-body" style="padding:0">${next7.html}</div>
+    </div>`;
+  updateHeatmap(recs);
+}
 
-  // Status
-  const st={};
-  recs.forEach(r=>{ const s=r.status||'Unknown'; st[s]=(st[s]||0)+1; });
-  const stS=Object.entries(st).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  if(charts.status) charts.status.destroy();
-  const c4=document.getElementById('ch-status');
-  if(c4) charts.status=new Chart(c4,{type:'doughnut',data:{labels:stS.map(([k])=>k),datasets:[{data:stS.map(([,v])=>v),backgroundColor:COLORS}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{boxWidth:11,font:{size:10}}}}}});
+function nextNDayDigest(recs, n) {
+  const today = todayStr();
+  const days = Array.from({length:n},(_,i)=>addDays(today,i));
+  const buckets = {};
+  days.forEach(d => buckets[d] = { meeting:0, event:0, space:0, traveler:0 });
+  let total = 0;
+  recs.forEach(r => { if (r.date && buckets[r.date]) { buckets[r.date][r._type] = (buckets[r.date][r._type]||0)+1; total++; } });
+  const rows = days.map(d => {
+    const dt = new Date(d+'T12:00:00');
+    const label = `${dt.toLocaleString('default',{weekday:'short'})} ${dt.getMonth()+1}/${dt.getDate()}`;
+    const b = buckets[d];
+    const sum = b.meeting + b.event + b.space + b.traveler;
+    return `<tr>
+      <td style="font-weight:600">${label}</td>
+      <td style="text-align:right">${b.meeting||'—'}</td>
+      <td style="text-align:right">${b.event||'—'}</td>
+      <td style="text-align:right">${b.space||'—'}</td>
+      <td style="text-align:right">${b.traveler||'—'}</td>
+      <td style="text-align:right;font-weight:700;color:${sum?'#1E293B':'#CBD5E1'}">${sum||'—'}</td>
+    </tr>`;
+  }).join('');
+  return { total, html: `<table class="upcoming-table">
+    <thead><tr><th>Day</th><th style="text-align:right">Meetings</th><th style="text-align:right">Events</th><th style="text-align:right">Space</th><th style="text-align:right">Travelers</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>` };
+}
+
+function renderWorkspace(recs) {
+  const space = recs.filter(r => r._type === 'space');
+  const trv = recs.filter(r => r._type === 'traveler');
+  const siteCounts = countBy(recs, r => r._canonicalSite || r.site);
+  const topSite = Object.entries(siteCounts).sort((a,b)=>b[1]-a[1])[0];
+  const util = computeUtilization(recs);
+
+  document.getElementById('tab-panel').innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card"><div class="summary-icon">🪑</div><div class="summary-label">Total Reservations</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">${space.length.toLocaleString()} space · ${trv.length.toLocaleString()} traveler</div></div>
+      <div class="summary-card"><div class="summary-icon">📈</div><div class="summary-label">Utilization</div><div class="summary-value">${util.display}</div><div class="summary-sub">${util.sub}</div></div>
+      <div class="summary-card"><div class="summary-icon">✈️</div><div class="summary-label">Traveler Arrivals</div><div class="summary-value">${trv.length.toLocaleString()}</div><div class="summary-sub">incoming</div></div>
+      <div class="summary-card"><div class="summary-icon">🏆</div><div class="summary-label">Top Site</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topSite?topSite[0]:'—'}</div><div class="summary-sub">${topSite?topSite[1].toLocaleString()+' reservations':'no data'}</div></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">🏢 By Site</div><div class="chart-container"><canvas id="ch-ws-site"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">📅 By Day (6-week trend)</div><div class="chart-container"><canvas id="ch-ws-day"></canvas></div></div>
+      <div class="chart-card" style="grid-column:1/-1"><div class="chart-title">📊 Capacity-Normalized Utilization per Site (% of Primary Seats, avg over date range)</div><div class="chart-container" style="height:240px"><canvas id="ch-ws-cap"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">📋 Upcoming Reservations & Travelers</div></div>
+      <div style="max-height:520px;overflow-y:auto">${renderSortableTable('workspace', recs, [
+        { label:'Date',    get:r=>r.date,        cell:fmtDateCell },
+        { label:'Site',    get:r=>r._canonicalSite||r.site||'' },
+        { label:'Type',    get:r=>r._type,       cell:r=>`<span class="badge ${RECORD_TYPES.find(x=>x.value===r._type)?.badge||'badge-meeting'}">${RECORD_TYPES.find(x=>x.value===r._type)?.label||r._type}</span>` },
+        { label:'Detail',  get:r=>r.event_name||r.room||'', cell:r=>`<div style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||r.room||'')}">${r.event_name||r.room||'—'}</div>` },
+        { label:'CM',      get:r=>r.cm_captain||'' },
+        { label:'Status',  get:r=>r.status||'',  cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${r.status}</span>`:'—' },
+      ])}</div>
+    </div>`;
+  const siteEntries = Object.entries(siteCounts).sort((a,b)=>b[1]-a[1]);
+  makeBarChart('ch-ws-site', 'wsSite', siteEntries.map(([k])=>k), siteEntries.map(([,v])=>v));
+  const daily = dailyBuckets(recs, 42);
+  makeBarChart('ch-ws-day', 'wsDay', daily.map(d=>d.label), daily.map(d=>d.v), { options:{ scales:{y:{beginAtZero:true}, x:{ticks:{maxTicksLimit:14}}} } });
+  // capacity-normalized: per site, total reservations / (primarySeats × days in range)
+  const days = Math.max(1, daysInRange());
+  const capData = siteEntries.map(([siteName, count]) => {
+    const seats = REF()?.bySiteName[siteName.toLowerCase()]?.capacity?.primarySeats;
+    return seats ? (count / (seats * days)) * 100 : null;
+  });
+  const capLabels = siteEntries.map(([k])=>k);
+  const capFiltered = capLabels.map((l,i)=>({l, v:capData[i]})).filter(x=>x.v!=null);
+  makeBarChart('ch-ws-cap', 'wsCap', capFiltered.map(x=>x.l), capFiltered.map(x=>x.v.toFixed(1)), { options:{ scales:{y:{beginAtZero:true, title:{display:true, text:'% of capacity'}}, x:{ticks:{maxRotation:45}}} } });
+}
+
+function renderMeetings(recs) {
+  const att = recs.reduce((s,r)=>s+(r.attendees||0),0);
+  const avgAtt = recs.length ? att / recs.length : 0;
+  const cmCounts = countBy(recs, 'cm_captain');
+  const topCMs = Object.entries(cmCounts).sort((a,b)=>b[1]-a[1]);
+  const topCM = topCMs[0];
+
+  document.getElementById('tab-panel').innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card"><div class="summary-icon">📅</div><div class="summary-label">Total Meetings</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">in date range</div></div>
+      <div class="summary-card"><div class="summary-icon">👥</div><div class="summary-label">Total Attendees</div><div class="summary-value">${att.toLocaleString()}</div><div class="summary-sub">${recs.filter(r=>r.attendees>0).length.toLocaleString()} meetings with counts</div></div>
+      <div class="summary-card"><div class="summary-icon">📊</div><div class="summary-label">Avg Attendees</div><div class="summary-value">${avgAtt.toFixed(1)}</div><div class="summary-sub">per meeting</div></div>
+      <div class="summary-card"><div class="summary-icon">🏆</div><div class="summary-label">Top CM</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topCM?topCM[0]:'—'}</div><div class="summary-sub">${topCM?topCM[1].toLocaleString()+' meetings':'no CM data'}</div></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">📅 Weekly Volume</div><div class="chart-container"><canvas id="ch-mtg-week"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">👤 By CM</div><div class="chart-container"><canvas id="ch-mtg-cm"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">🏢 By Site</div><div class="chart-container"><canvas id="ch-mtg-site"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">📊 Status Mix</div><div class="chart-container"><canvas id="ch-mtg-status"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">📋 Upcoming Meetings</div></div>
+      <div style="max-height:520px;overflow-y:auto">${renderSortableTable('meetings', recs, [
+        { label:'Date',      get:r=>r.date, cell:fmtDateCell },
+        { label:'Site',      get:r=>r._canonicalSite||r.site||'' },
+        { label:'Meeting',   get:r=>r.event_name||'', cell:r=>`<div style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${r.event_name||'—'}</div>` },
+        { label:'CM',        get:r=>r.cm_captain||'' },
+        { label:'Attendees', get:r=>r.attendees||0, cell:r=>r.attendees>0?String(r.attendees.toLocaleString()):'—' },
+        { label:'Status',    get:r=>r.status||'', cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${r.status}</span>`:'—' },
+        { label:'Room',      get:r=>r.room||'' },
+      ])}</div>
+    </div>`;
+  const wk = weeklyBuckets(recs);
+  makeBarChart('ch-mtg-week','mtgWeek', wk.map(w=>w.label), wk.map(w=>w.v), { options:{ scales:{y:{beginAtZero:true},x:{ticks:{maxTicksLimit:10}}} } });
+  const cmTop = topCMs.slice(0,12);
+  makeHBarChart('ch-mtg-cm','mtgCm', cmTop.map(([k])=>k), cmTop.map(([,v])=>v));
+  const si = Object.entries(countBy(recs, r=>r._canonicalSite||r.site)).sort((a,b)=>b[1]-a[1]);
+  makeBarChart('ch-mtg-site','mtgSite', si.map(([k])=>k), si.map(([,v])=>v));
+  const stE = Object.entries(countBy(recs, r=>r.status||'Unknown')).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  makeDonut('ch-mtg-status','mtgStatus', stE.map(([k])=>k), stE.map(([,v])=>v));
+}
+
+function renderEvents(recs) {
+  const att = recs.reduce((s,r)=>s+(r.attendees||0),0);
+  const statusCounts = countBy(recs, r=>r.status||'Unknown');
+  const confirmed = Object.entries(statusCounts).filter(([k])=>/confirm/i.test(k)).reduce((s,[,v])=>s+v,0);
+  const pending = Object.entries(statusCounts).filter(([k])=>/pend|approv/i.test(k)).reduce((s,[,v])=>s+v,0);
+  const cmCounts = countBy(recs, 'cm_captain');
+  const topCMs = Object.entries(cmCounts).sort((a,b)=>b[1]-a[1]);
+  const topCM = topCMs[0];
+
+  document.getElementById('tab-panel').innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card"><div class="summary-icon">🎯</div><div class="summary-label">Total Events</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">${confirmed.toLocaleString()} confirmed · ${pending.toLocaleString()} pending</div></div>
+      <div class="summary-card"><div class="summary-icon">✅</div><div class="summary-label">Confirmed</div><div class="summary-value">${confirmed.toLocaleString()}</div><div class="summary-sub">${recs.length?Math.round(100*confirmed/recs.length)+'% of events':'—'}</div></div>
+      <div class="summary-card"><div class="summary-icon">👥</div><div class="summary-label">Total Attendees</div><div class="summary-value">${att.toLocaleString()}</div><div class="summary-sub">across events (proxy for scale)</div></div>
+      <div class="summary-card"><div class="summary-icon">🏆</div><div class="summary-label">Top CM Lead</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topCM?topCM[0]:'—'}</div><div class="summary-sub">${topCM?topCM[1].toLocaleString()+' events':'no CM data'}</div></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">📊 Status Mix</div><div class="chart-container"><canvas id="ch-evt-status"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">👤 By CM Lead</div><div class="chart-container"><canvas id="ch-evt-cm"></canvas></div></div>
+      <div class="chart-card" style="grid-column:1/-1"><div class="chart-title">📅 Monthly Volume</div><div class="chart-container" style="height:240px"><canvas id="ch-evt-month"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">📋 Upcoming Events</div></div>
+      <div style="max-height:520px;overflow-y:auto">${renderSortableTable('events', recs, [
+        { label:'Date',      get:r=>r.date, cell:fmtDateCell },
+        { label:'Site',      get:r=>r._canonicalSite||r.site||'' },
+        { label:'Event',     get:r=>r.event_name||'', cell:r=>`<div style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${r.event_name||'—'}</div>` },
+        { label:'CM Lead',   get:r=>r.cm_captain||'' },
+        { label:'Attendees', get:r=>r.attendees||0, cell:r=>r.attendees>0?String(r.attendees.toLocaleString()):'—' },
+        { label:'Status',    get:r=>r.status||'', cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${r.status}</span>`:'—' },
+        { label:'Type',      get:r=>r.event_type||'' },
+      ])}</div>
+    </div>`;
+  const stE = Object.entries(statusCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  makeDonut('ch-evt-status','evtStatus', stE.map(([k])=>k), stE.map(([,v])=>v));
+  const cmTop = topCMs.slice(0,12);
+  makeHBarChart('ch-evt-cm','evtCm', cmTop.map(([k])=>k), cmTop.map(([,v])=>v));
+  const mo = monthlyBuckets(recs);
+  makeBarChart('ch-evt-month','evtMonth', mo.map(m=>m.label), mo.map(m=>m.v));
+}
+
+function daysInRange() {
+  const f = document.getElementById('f-from')?.value;
+  const t = document.getElementById('f-to')?.value;
+  if (!f || !t) return 90;
+  const ms = new Date(t+'T12:00:00') - new Date(f+'T12:00:00');
+  return Math.max(1, Math.round(ms / 86400000) + 1);
+}
+
+function computeUtilization(recs) {
+  // Avg over the date range: total reservations / (primary seats × days)
+  // Only count sites we have reference capacity for.
+  if (!REF()) return { display:'—', sub:'reference data not loaded' };
+  const days = daysInRange();
+  const perSite = {};
+  recs.forEach(r => { const s = r._canonicalSite || r.site; if (!s) return; perSite[s] = (perSite[s]||0)+1; });
+  let totalRsv = 0, totalCapDays = 0, sitesUsed = 0;
+  Object.entries(perSite).forEach(([s, count]) => {
+    const seats = REF().bySiteName[s.toLowerCase()]?.capacity?.primarySeats;
+    if (seats) { totalRsv += count; totalCapDays += seats * days; sitesUsed++; }
+  });
+  if (!totalCapDays) return { display:'—', sub:'no matching reference sites' };
+  const pct = (totalRsv / totalCapDays) * 100;
+  return { display: pct < 100 ? pct.toFixed(1)+'%' : Math.round(pct)+'%', sub: `${sitesUsed} site${sitesUsed===1?'':'s'} × ${days} day${days===1?'':'s'}` };
+}
+
+// ── SORTABLE TABLE ─────────────────────────────────────────────────────────
+function fmtDateCell(r) {
+  if (!r.date) return '—';
+  const d = new Date(r.date+'T12:00:00');
+  if (isNaN(d)) return r.date;
+  return `<div style="white-space:nowrap;font-weight:600">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>`;
+}
+
+function renderSortableTable(tabId, records, columns) {
+  const st = tableSort[tabId] || (tableSort[tabId] = { col:0, dir:1 });
+  const sorted = [...records].sort((a,b) => {
+    const c = columns[st.col]; if (!c) return 0;
+    const va = c.get(a), vb = c.get(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * st.dir;
+    return String(va).localeCompare(String(vb)) * st.dir;
+  });
+  const head = columns.map((c,i) => `<th class="sortable-th${st.col===i?' sorted':''}" onclick="sortTable('${tabId}',${i})">${c.label}${st.col===i?(st.dir>0?' ▲':' ▼'):''}</th>`).join('');
+  if (!sorted.length) return `<table class="upcoming-table"><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${columns.length}" class="empty-state">No records match filters</td></tr></tbody></table>`;
+  const body = sorted.slice(0,500).map(r => `<tr>${columns.map(c => `<td>${c.cell ? c.cell(r) : (c.get(r) || '—')}</td>`).join('')}</tr>`).join('');
+  const more = sorted.length > 500 ? `<tr><td colspan="${columns.length}" style="text-align:center;padding:14px;color:#94A3B8;font-size:12px">Showing first 500 of ${sorted.length.toLocaleString()} — use filters to narrow</td></tr>` : '';
+  return `<table class="upcoming-table"><thead><tr>${head}</tr></thead><tbody>${body}${more}</tbody></table>`;
+}
+
+function sortTable(tabId, colIdx) {
+  const st = tableSort[tabId] || (tableSort[tabId] = { col:0, dir:1 });
+  if (st.col === colIdx) st.dir = -st.dir;
+  else { st.col = colIdx; st.dir = 1; }
+  refreshDash();
 }
 
 function updateHeatmap(recs) {
@@ -1140,29 +1436,6 @@ function stsCls(s) {
   if(sl.includes('cancel')) return 'status-canceled';
   if(sl.includes('pend')||sl.includes('approv')) return 'status-pending';
   return 'status-other';
-}
-
-function updateTable(recs) {
-  const sorted=[...recs].filter(r=>r.date).sort((a,b)=>a.date<b.date?-1:1);
-  const tbody=document.getElementById('tbl-body'); if(!tbody) return;
-  document.getElementById('tbl-count').textContent=`${sorted.length.toLocaleString()} records`;
-  if(!sorted.length){ tbody.innerHTML='<tr><td colspan="9" class="empty-state">No records match filters</td></tr>'; return; }
-  const ti=r=>RECORD_TYPES.find(x=>x.value===r._type)||RECORD_TYPES[0];
-  tbody.innerHTML=sorted.slice(0,500).map(r=>{
-    const dd=new Date(r.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-    return `<tr>
-      <td style="white-space:nowrap;font-weight:600">${dd}</td>
-      <td>${r.site||'—'}</td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.event_name||'').replace(/"/g,'&quot;')}">${r.event_name||'—'}</td>
-      <td>${r.cm_captain||'—'}</td>
-      <td style="text-align:right">${r.attendees>0?r.attendees.toLocaleString():'—'}</td>
-      <td><span class="status-badge ${stsCls(r.status)}">${r.status||'—'}</span></td>
-      <td><span class="badge ${ti(r).badge}">${ti(r).label}</span></td>
-      <td style="white-space:nowrap">${r.time||'—'}</td>
-      <td>${r.room||'—'}</td>
-    </tr>`;
-  }).join('');
-  if(sorted.length>500) tbody.innerHTML+=`<tr><td colspan="9" style="text-align:center;padding:14px;color:#94A3B8;font-size:12px">Showing first 500 of ${sorted.length.toLocaleString()} — use filters to narrow</td></tr>`;
 }
 
 function exportCSV() {

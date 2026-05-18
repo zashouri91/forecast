@@ -1066,8 +1066,6 @@ function buildSiteDayStats(records) {
   records.forEach(r => {
     const d = r.date || '';
     if (!d) return;
-    if (from && d < from) return;
-    if (to && d > to) return;
     const site = siteKey(r);
     if (!site) return;
     const row = add(site, d);

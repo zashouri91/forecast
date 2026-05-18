@@ -969,7 +969,7 @@ function renderDashboard() {
 
   document.getElementById('dashboard-content').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;flex-wrap:wrap;gap:14px">
-      <div><div class="section-title">Community Manager Forecast</div><div class="section-sub">${state.records.length.toLocaleString()} record${state.records.length===1?'':'s'} across ${getAllSiteNames().length} location${getAllSiteNames().length===1?'':'s'}</div></div>
+      <div><div class="section-title">Community Manager Forecast</div><div class="section-sub" id="dash-subtitle">${state.records.length.toLocaleString()} record${state.records.length===1?'':'s'} across ${getAllSiteNames().length} location${getAllSiteNames().length===1?'':'s'}</div></div>
       <div style="display:flex;gap:10px;align-items:flex-end">
         <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">From</label><input type="date" id="f-from" value="${today}" onchange="refreshDash()" style="width:130px"></div>
         <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">To</label><input type="date" id="f-to" value="${to90}" onchange="refreshDash()" style="width:130px"></div>
@@ -1115,7 +1115,35 @@ function refreshDash() {
   const recs = getTabFiltered();
   const fn = { overview: renderOverview, workspace: renderWorkspace, meetings: renderMeetings, events: renderEvents }[activeTab] || renderOverview;
   fn(recs);
+  updateSubtitle();
   // tab counts in the strip reflect the *unfiltered* tab scope, so don't recompute here
+}
+
+function activeFilterPills() {
+  const out = [];
+  const set = (k) => filterState[k];
+  if (!set('sites').has('all'))    out.push({k:'sites',    label:'Location',         vals:[...set('sites')]});
+  if (!set('regions').has('all'))  out.push({k:'regions',  label:'Regional Leader',  vals:[...set('regions')]});
+  if (!set('cms').has('all'))      out.push({k:'cms',      label:'CM Captain',       vals:[...set('cms')]});
+  if (!set('statuses').has('all')) out.push({k:'statuses', label:'Status',           vals:[...set('statuses')]});
+  return out;
+}
+
+function updateSubtitle() {
+  const el = document.getElementById('dash-subtitle'); if (!el) return;
+  const tab = TABS.find(t => t.id === activeTab) || TABS[0];
+  const totalInTab = state.records.filter(tab.scope).length;
+  const shown = getTabFiltered().length;
+  const noun = { overview:'record', workspace:'reservation', meetings:'meeting', events:'event' }[activeTab] || 'record';
+  const pills = activeFilterPills();
+  const baseText = totalInTab ? `${shown.toLocaleString()} of ${totalInTab.toLocaleString()} ${noun}${totalInTab===1?'':'s'}` : `0 ${noun}s`;
+  let pillsHtml = '';
+  if (pills.length) {
+    pillsHtml = ' · ' + pills.map(p =>
+      `<span style="display:inline-flex;align-items:center;gap:6px;background:#EDE9FE;color:#4338CA;border-radius:14px;padding:3px 10px;font-weight:600;margin-right:6px">${p.label}: ${p.vals.join(', ')}</span>`
+    ).join('');
+  }
+  el.innerHTML = baseText + pillsHtml;
 }
 
 function countBy(recs, key) {
@@ -1139,7 +1167,7 @@ function renderOverview(recs) {
     </div>
     <div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">Community Manager Daily Load · Next 6 Weeks</div>
+        <div class="card-title">Location Busyness · Next 6 Weeks</div>
         ${REF() ? `<select id="heatmap-mode" onchange="setHeatmapMode(this.value)" style="width:auto;max-width:260px;font-size:11px">
           <option value="count"${heatmapMode==='count'?' selected':''}>Show: Raw count</option>
           <option value="pct_primary_seats"${heatmapMode==='pct_primary_seats'?' selected':''}>Show: % of Primary Seats</option>
@@ -1178,7 +1206,7 @@ function nextNDayDigest(recs, n) {
     </tr>`;
   }).join('');
   return { total, html: `<table class="upcoming-table">
-    <thead><tr><th>Day</th><th style="text-align:right">Meetings</th><th style="text-align:right">Events</th><th style="text-align:right">Space</th><th style="text-align:right">Travelers</th><th style="text-align:right">Total</th></tr></thead>
+    <thead><tr><th>Day</th><th style="text-align:right">Meetings</th><th style="text-align:right">Events</th><th style="text-align:right">PulsePoint Spaces Reservations</th><th style="text-align:right">VIP Travelers</th><th style="text-align:right">Total</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>` };
 }
@@ -1455,53 +1483,49 @@ function sortTable(tabId, colIdx) {
   refreshDash();
 }
 
+// Location Busyness heatmap. Rows are the 9 master locations, columns are 42 days.
+// Each cell aggregates every signal — meetings, events, VIP travelers, workspace
+// reservations — into a single busyness count for that (location, day).
 function updateHeatmap(recs) {
   const wrap=document.getElementById('heatmap-wrap'); if(!wrap) return;
   const today=todayStr();
   const days=Array.from({length:42},(_,i)=>addDays(today,i));
-  const cms=[...new Set(recs.map(r=>r.cm_captain).filter(Boolean))].sort().slice(0,10);
-  if(!cms.length){ wrap.innerHTML='<div class="text-muted" style="text-align:center;padding:16px">Map "CM Captain / Lead" to see this chart</div>'; return; }
-  // raw counts per CM × day
-  const counts={};
-  cms.forEach(c=>{counts[c]={};});
-  recs.forEach(r=>{ if(r.cm_captain&&r.date&&counts[r.cm_captain]) counts[r.cm_captain][r.date]=(counts[r.cm_captain][r.date]||0)+1; });
+  // Anchor the row axis on the master reference so all 9 locations are always shown
+  // (even ones with zero records in the current filter). Falls back to any sites
+  // observed in the records if no reference is loaded.
+  const locations = REF()
+    ? REF().sites.map(s => s.siteName)
+    : [...new Set(recs.map(r => r._canonicalSite || r.site).filter(Boolean))].sort();
+  if (!locations.length) {
+    wrap.innerHTML = '<div class="text-muted" style="text-align:center;padding:16px">Upload data to populate location busyness</div>';
+    return;
+  }
 
-  // Per-CM denominator for normalization modes (sum across sites the CM is associated with).
-  // Source 1: the master reference (CM listed as Assigned CM at one or more sites).
-  // Source 2: enriched _baseline/_capacity on records, fallback for CMs not in master.
-  const denomFor = (cm) => {
-    let primarySeats=0, expectedDailyUsage=0, avgTuesThurBadge=0, found=false;
-    if (REF()) {
-      REF().sites.forEach(s => {
-        if ((s.assignedCMs||[]).includes(cm)) {
-          primarySeats += (s.capacity && s.capacity.primarySeats) || 0;
-          expectedDailyUsage += (s.baseline && s.baseline.expectedDailyUsage) || 0;
-          avgTuesThurBadge += (s.baseline && s.baseline.avgTuesThurBadge) || 0;
-          found = true;
-        }
-      });
-    }
-    if (!found) {
-      // fall back to any record for this CM that's enriched
-      const seenSites = new Set();
-      recs.forEach(r => {
-        if (r.cm_captain === cm && r._canonicalSite && !seenSites.has(r._canonicalSite)) {
-          seenSites.add(r._canonicalSite);
-          primarySeats += (r._capacity && r._capacity.primarySeats) || 0;
-          expectedDailyUsage += (r._baseline && r._baseline.expectedDailyUsage) || 0;
-          avgTuesThurBadge += (r._baseline && r._baseline.avgTuesThurBadge) || 0;
-        }
-      });
-    }
-    return { primarySeats, expectedDailyUsage, avgTuesThurBadge };
+  // counts[location][date] = total records of any type on that date at that location
+  const counts={};
+  locations.forEach(loc => counts[loc] = {});
+  recs.forEach(r => {
+    const loc = r._canonicalSite || r.site;
+    if (!loc || !counts[loc] || !r.date) return;
+    counts[loc][r.date] = (counts[loc][r.date] || 0) + 1;
+  });
+
+  // Per-location denominator for the % modes — pulled directly from the master reference.
+  const denomFor = (loc) => {
+    const refSite = REF()?.bySiteName?.[loc.toLowerCase()];
+    return {
+      primarySeats: refSite?.capacity?.primarySeats || 0,
+      expectedDailyUsage: refSite?.baseline?.expectedDailyUsage || 0,
+      avgTuesThurBadge: refSite?.baseline?.avgTuesThurBadge || 0,
+    };
   };
-  const denoms = {}; cms.forEach(c => denoms[c] = denomFor(c));
+  const denoms = {}; locations.forEach(loc => denoms[loc] = denomFor(loc));
 
   const modeKey = heatmapMode || 'count';
-  const valueFor = (cm, day) => {
-    const raw = counts[cm][day] || 0;
+  const valueFor = (loc, day) => {
+    const raw = counts[loc][day] || 0;
     if (modeKey === 'count' || !REF()) return { display: raw||'', numeric: raw, units: '' };
-    const d = denoms[cm] || {};
+    const d = denoms[loc] || {};
     let denom = 0, label = '';
     if (modeKey === 'pct_primary_seats') { denom = d.primarySeats; label = '% seats'; }
     else if (modeKey === 'pct_expected_usage') { denom = d.expectedDailyUsage; label = '% EDU'; }
@@ -1511,34 +1535,33 @@ function updateHeatmap(recs) {
     return { display: raw ? `${pct.toFixed(pct<10?1:0)}%` : '', numeric: pct, units: label };
   };
 
-  // Compute max for color scale across all rendered cells
   let maxV = 0;
-  cms.forEach(cm => days.forEach(d => { const v = valueFor(cm,d); if (v.numeric > maxV) maxV = v.numeric; }));
+  locations.forEach(loc => days.forEach(d => { const v = valueFor(loc,d); if (v.numeric > maxV) maxV = v.numeric; }));
   if (maxV <= 0) maxV = 1;
-  const hcls=v=>!v?'heat-0':v/maxV<.25?'heat-1':v/maxV<.5?'heat-2':v/maxV<.75?'heat-3':'heat-4';
+  const hcls = v => !v?'heat-0':v/maxV<.25?'heat-1':v/maxV<.5?'heat-2':v/maxV<.75?'heat-3':'heat-4';
 
-  const modeLabel = { count:'records', pct_primary_seats:'% of primary seats', pct_expected_usage:'% of expected daily usage', vs_tt_baseline:'% of Avg Tues-Thurs badge' }[modeKey] || 'records';
+  const modeLabel = { count:'records per day', pct_primary_seats:'% of primary seats', pct_expected_usage:'% of expected daily usage', vs_tt_baseline:'% of Avg Tues-Thurs badge' }[modeKey] || 'records per day';
 
   const cols=`140px repeat(${days.length},22px)`;
   let h=`<div style="display:grid;grid-template-columns:${cols};gap:2px;margin-bottom:3px"><div></div>`;
-  days.forEach(d=>{ const dt=new Date(d+'T12:00:00'); h+=`<div style="font-size:9px;color:#94A3B8;text-align:center">${dt.getMonth()+1}/${dt.getDate()}</div>`; });
-  h+='</div>';
-  cms.forEach(cm=>{
-    h+=`<div style="display:grid;grid-template-columns:${cols};gap:2px;margin-bottom:2px;align-items:center">`;
-    h+=`<div style="font-size:11px;color:#374151;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px" title="${cm}">${cm}</div>`;
-    days.forEach(d=>{
-      const v=valueFor(cm,d);
-      const tip = `${cm}: ${counts[cm][d]||0} records on ${d}` + (v.units?` (${v.display} ${v.units})`:'') + (v.missing?' · no reference capacity for this CM':'');
-      h+=`<div class="heat-cell ${hcls(v.numeric)}" title="${tip.replace(/"/g,'&quot;')}" style="${v.missing?'opacity:.55':''}">${v.display}</div>`;
+  days.forEach(d => { const dt=new Date(d+'T12:00:00'); h+=`<div style="font-size:9px;color:#94A3B8;text-align:center">${dt.getMonth()+1}/${dt.getDate()}</div>`; });
+  h += '</div>';
+  locations.forEach(loc => {
+    h += `<div style="display:grid;grid-template-columns:${cols};gap:2px;margin-bottom:2px;align-items:center">`;
+    h += `<div style="font-size:11px;color:#374151;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px" title="${loc}">${loc}</div>`;
+    days.forEach(d => {
+      const v = valueFor(loc, d);
+      const tip = `${loc}: ${counts[loc][d]||0} records on ${d}` + (v.units?` (${v.display} ${v.units})`:'') + (v.missing?' · no reference capacity for this location':'');
+      h += `<div class="heat-cell ${hcls(v.numeric)}" title="${tip.replace(/"/g,'&quot;')}" style="${v.missing?'opacity:.55':''}">${v.display}</div>`;
     });
-    h+='</div>';
+    h += '</div>';
   });
-  h+=`<div style="display:flex;gap:12px;margin-top:14px;align-items:center;flex-wrap:wrap">
-    <span style="font-size:11px;color:#64748B">Load (${modeLabel}):</span>
+  h += `<div style="display:flex;gap:12px;margin-top:14px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:11px;color:#64748B">Busyness (${modeLabel}):</span>
     ${['heat-0','heat-1','heat-2','heat-3','heat-4'].map((c,i)=>`<div style="display:flex;align-items:center;gap:4px"><div class="heat-cell ${c}" style="width:22px;height:14px;font-size:0"></div><span style="font-size:10px;color:#64748B">${['None','Low','Med','High','Peak'][i]}</span></div>`).join('')}
-    ${REF() && modeKey!=='count' ? '<span style="font-size:10px;color:#94A3B8;margin-left:8px">Normalized using CM’s assigned site capacities from the master reference</span>' : ''}
+    ${REF() && modeKey!=='count' ? '<span style="font-size:10px;color:#94A3B8;margin-left:8px">Normalized using each location\'s capacity from the master reference</span>' : ''}
   </div>`;
-  wrap.innerHTML=h;
+  wrap.innerHTML = h;
 }
 
 function stsCls(s) {

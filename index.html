@@ -935,6 +935,234 @@ function applyMappings() {
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
 const COLORS=['#4338CA','#06B6D4','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16','#F43F5E'];
 
+// ── EXEC RISK MODEL (Executive Visibility) ─────────────────────────────────
+// Option A: in-tool simulation controls (overlay). Adjust assumptions live; results update immediately.
+// Capacity model (defaults):
+//   Effective CMs = Raw CMs × PTO factor (default 0.85)
+//   Daily capacity = Effective CMs × meeting-equivalents per day (default 5)
+// Load model (defaults):
+//   Meetings(1) + Events(5) + VIP(3) + Attendees/75 + Catering(2) + Travelers(0.5)
+// Risk thresholds (defaults):
+//   Elevated >= 70% utilization; High > 100% utilization OR override rules.
+
+const MODEL_DEFAULTS = {
+  // Capacity
+  ptoFactor: 0.85,
+  meetingEqPerDay: 5,
+
+  // Weights
+  wMeeting: 1,
+  wEvent: 5,
+  wVip: 3,
+  wCatering: 2,
+  wTraveler: 0.5,
+  attendeeDivisor: 75,
+
+  // Thresholds
+  thrElevated: 0.70,
+  thrHigh: 1.00,
+
+  // Override sensitivity
+  vipTrigger: 4,
+};
+
+let MODEL = loadModel();
+
+function loadModel() {
+  try {
+    const raw = localStorage.getItem('cmForecastModel');
+    if (!raw) return { ...MODEL_DEFAULTS };
+    const parsed = JSON.parse(raw);
+    return { ...MODEL_DEFAULTS, ...parsed };
+  } catch (_) {
+    return { ...MODEL_DEFAULTS };
+  }
+}
+
+function saveModel() {
+  try { localStorage.setItem('cmForecastModel', JSON.stringify(MODEL)); } catch (_) {}
+}
+
+function resetModel() {
+  MODEL = { ...MODEL_DEFAULTS };
+  saveModel();
+  refreshDash();
+}
+
+function setModel(key, val) {
+  const num = (val === '' || val == null) ? null : Number(val);
+  MODEL[key] = (num == null || Number.isNaN(num)) ? MODEL_DEFAULTS[key] : num;
+
+  // Guardrails
+  MODEL.ptoFactor = Math.max(0.5, Math.min(1.0, Number(MODEL.ptoFactor)));
+  MODEL.meetingEqPerDay = Math.max(1, Math.min(12, Number(MODEL.meetingEqPerDay)));
+  MODEL.attendeeDivisor = Math.max(25, Math.min(300, Number(MODEL.attendeeDivisor)));
+  MODEL.thrElevated = Math.max(0.2, Math.min(0.95, Number(MODEL.thrElevated)));
+  MODEL.thrHigh = Math.max(MODEL.thrElevated + 0.01, Math.min(2.0, Number(MODEL.thrHigh)));
+  MODEL.vipTrigger = Math.max(1, Math.min(10, Math.round(Number(MODEL.vipTrigger))));
+
+  // Keep weights sensible
+  ['wMeeting','wEvent','wVip','wCatering','wTraveler'].forEach(k => {
+    MODEL[k] = Math.max(0, Math.min(25, Number(MODEL[k])));
+  });
+
+  saveModel();
+  refreshDash();
+}
+
+function rawCMCountForSite(siteName) {
+  if (!REF() || !siteName) return 0;
+  const s = REF().bySiteName[siteName.toLowerCase()];
+  const cms = s && Array.isArray(s.assignedCMs) ? s.assignedCMs : [];
+  return cms.length;
+}
+
+function effectiveCMCount(siteName) {
+  const raw = rawCMCountForSite(siteName);
+  return raw ? raw * MODEL.ptoFactor : 0;
+}
+
+function dailyCapacity(siteName) {
+  const eff = effectiveCMCount(siteName);
+  return eff * MODEL.meetingEqPerDay;
+}
+
+function hasCatering(r) {
+  const v = (r.catering || '').toString().trim();
+  if (!v) return false;
+  return !/^(no|n\/a|none|false|0)$/i.test(v);
+}
+
+function siteKey(r) {
+  return (r._canonicalSite || r.site || '').toString();
+}
+
+function buildSiteDayStats(records, from, to) {
+  const stats = {};
+  const add = (site, date) => {
+    stats[site] = stats[site] || {};
+    stats[site][date] = stats[site][date] || {
+      site, date,
+      meetings: 0,
+      events: 0,
+      travelers: 0,
+      vip: 0,
+      attendees: 0,
+      catering: 0,
+      load: 0,
+      capacity: 0,
+      util: 0,
+      flags: {},
+    };
+    return stats[site][date];
+  };
+
+  records.forEach(r => {
+    const d = r.date || '';
+    if (!d) return;
+    if (from && d < from) return;
+    if (to && d > to) return;
+    const site = siteKey(r);
+    if (!site) return;
+    const row = add(site, d);
+
+    if (r._type === 'meeting') {
+      row.meetings += 1;
+      row.vip += hasVip(r) ? 1 : 0;
+      row.attendees += (r.attendees || 0);
+      if (hasCatering(r)) row.catering += 1;
+    } else if (r._type === 'event') {
+      row.events += 1;
+      row.vip += hasVip(r) ? 1 : 0;
+      row.attendees += (r.attendees || 0);
+      if (hasCatering(r)) row.catering += 1;
+    } else if (r._type === 'traveler') {
+      row.travelers += 1;
+    } else {
+      // space reservations intentionally excluded from capacity load in this model
+    }
+  });
+
+  // compute load + utilization
+  Object.keys(stats).forEach(site => {
+    const cap = dailyCapacity(site);
+    Object.keys(stats[site]).forEach(date => {
+      const row = stats[site][date];
+      row.capacity = cap;
+      row.load = (
+        (row.meetings * MODEL.wMeeting) +
+        (row.events * MODEL.wEvent) +
+        (row.vip * MODEL.wVip) +
+        (row.attendees / MODEL.attendeeDivisor) +
+        (row.catering * MODEL.wCatering) +
+        (row.travelers * MODEL.wTraveler)
+      );
+      row.util = cap > 0 ? (row.load / cap) : 0;
+    });
+  });
+
+  // overrides needing adjacent day context
+  const dateAdd = (s, n) => {
+    const d = new Date(s + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    return fmtDate(d.toISOString());
+  };
+
+  Object.keys(stats).forEach(site => {
+    Object.keys(stats[site]).forEach(date => {
+      const row = stats[site][date];
+      const tomorrow = dateAdd(date, 1);
+      const tomorrowRow = stats[site][tomorrow];
+      const eff = effectiveCMCount(site);
+      const highMeetings = row.meetings > (eff * MODEL.meetingEqPerDay);
+
+      row.flags.highMeetings = highMeetings;
+      row.flags.eventStack = row.events >= 2;
+      row.flags.eventPlusHighMeetings = (row.events >= 1) && highMeetings;
+      row.flags.badDayCombo = (row.events >= 1) && (row.vip >= MODEL.vipTrigger) && highMeetings;
+      row.flags.backToBackEvents = (row.events >= 1) && (tomorrowRow && tomorrowRow.events >= 1);
+
+      row.flags.overrideRed = row.flags.badDayCombo || row.flags.backToBackEvents || row.flags.eventStack || row.flags.eventPlusHighMeetings;
+      row.flags.status = riskStatus(row.util, row.flags.overrideRed);
+    });
+  });
+
+  return stats;
+}
+
+function riskStatus(util, overrideRed) {
+  if (overrideRed) return 'high';
+  if (util > MODEL.thrHigh) return 'high';
+  if (util >= MODEL.thrElevated) return 'elevated';
+  return 'normal';
+}
+
+function statusLabel(s) {
+  // Inline colored dot keeps severity legible at a glance without using emoji.
+  const dot = (color) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle"></span>`;
+  if (s === 'high') return { txt: 'High Risk', badge: 'status-canceled', icon: dot('#E11D48') };
+  if (s === 'elevated') return { txt: 'Elevated', badge: 'status-pending', icon: dot('#F59E0B') };
+  return { txt: 'Normal', badge: 'status-confirmed', icon: dot('#10B981') };
+}
+
+function topDrivers(row) {
+  const d = [];
+  if (row.events) d.push(`${row.events} event${row.events===1?'':'s'}`);
+  if (row.vip) d.push(`${row.vip} VIP`);
+  if (row.meetings) d.push(`${row.meetings} mtg`);
+  if (row.catering) d.push(`${row.catering} catering`);
+  if (row.travelers) d.push(`${row.travelers} traveler${row.travelers===1?'':'s'}`);
+  if (row.flags.backToBackEvents) d.push('back-to-back events');
+  if (row.flags.highMeetings) d.push('high meeting volume');
+  return d.length ? d.join(' · ') : '—';
+}
+
+function pct(n) {
+  if (!isFinite(n)) return '—';
+  return (n*100).toFixed(n*100 < 10 ? 1 : 0) + '%';
+}
+
+
 const TABS = [
   { id:'overview',  label:'Overview',               scope:()=>true },
   { id:'workspace', label:'Workspace Reservations', scope:r=>r._type==='space'||r._type==='traveler' },
@@ -1155,7 +1383,50 @@ function renderOverview(recs) {
   const mtg = recs.filter(r => r._type === 'meeting').length;
   const evt = recs.filter(r => r._type === 'event').length;
   const rsv = recs.filter(r => r._type === 'space' || r._type === 'traveler').length;
-  const activeCMs = new Set(recs.map(r => r.cm_captain).filter(Boolean)).size;
+
+  const from = document.getElementById('f-from')?.value || '';
+  const to = document.getElementById('f-to')?.value || '';
+
+  // Executive Risk Radar: peak-day risk per site in the selected date window
+  const stats = buildSiteDayStats(recs, from, to);
+  const sites = (REF() ? REF().sites.map(s => s.siteName) : Object.keys(stats)).slice();
+
+  const siteSummaries = sites.map(site => {
+    const days = stats[site] ? Object.values(stats[site]) : [];
+    if (!days.length) {
+      return { site, status: 'normal', peakUtil: 0, peakDate: '', peakRow: null, drivers: '—' };
+    }
+    days.sort((a,b) => (b.util - a.util) || (a.date < b.date ? -1 : 1));
+    const peak = days[0];
+    const status = peak.flags?.status || riskStatus(peak.util, false);
+    return { site, status, peakUtil: peak.util, peakDate: peak.date, peakRow: peak, drivers: topDrivers(peak) };
+  });
+
+  const counts = { high:0, elevated:0, normal:0 };
+  siteSummaries.forEach(s => { counts[s.status] = (counts[s.status]||0)+1; });
+
+  const sevRank = { high: 0, elevated: 1, normal: 2 };
+  siteSummaries.sort((a,b) => (sevRank[a.status]-sevRank[b.status]) || (b.peakUtil-a.peakUtil) || a.site.localeCompare(b.site));
+
+  const riskRows = siteSummaries.map(s => {
+    const meta = statusLabel(s.status);
+    const utilTxt = s.peakRow ? pct(s.peakUtil) : '—';
+    const cap = s.peakRow ? s.peakRow.capacity : dailyCapacity(s.site);
+    const capTxt = cap ? cap.toFixed(1) : '—';
+    const loadTxt = s.peakRow ? s.peakRow.load.toFixed(1) : '—';
+    return `
+      <tr>
+        <td style="font-weight:700">${meta.icon} ${s.site}</td>
+        <td><span class="status-badge ${meta.badge}">${meta.txt}</span></td>
+        <td style="text-align:right;font-weight:700">${utilTxt}</td>
+        <td style="text-align:right">${loadTxt}</td>
+        <td style="text-align:right" class="text-muted">${capTxt}</td>
+        <td><div style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(s.drivers)}">${escapeHtml(s.drivers)}</div></td>
+        <td style="white-space:nowrap" class="text-muted">${s.peakDate || '—'}</td>
+      </tr>
+    `;
+  }).join('');
+
   const next7 = nextNDayDigest(recs, 7);
 
   document.getElementById('tab-panel').innerHTML = `
@@ -1163,8 +1434,113 @@ function renderOverview(recs) {
       <div class="summary-card" data-tone="indigo"><div class="summary-label">Meetings</div><div class="summary-value">${mtg.toLocaleString()}</div><div class="summary-sub">in date range</div></div>
       <div class="summary-card" data-tone="rose"><div class="summary-label">Events</div><div class="summary-value">${evt.toLocaleString()}</div><div class="summary-sub">planned</div></div>
       <div class="summary-card" data-tone="teal"><div class="summary-label">Reservations</div><div class="summary-value">${rsv.toLocaleString()}</div><div class="summary-sub">workspaces and travelers</div></div>
-      <div class="summary-card" data-tone="emerald"><div class="summary-label">Active Community Managers</div><div class="summary-value">${activeCMs.toLocaleString()}</div><div class="summary-sub">with records in range</div></div>
+      <div class="summary-card" data-tone="amber"><div class="summary-label">Portfolio Risk</div>
+        <div class="summary-value" style="font-size:16px;line-height:1.2">
+          <span style="color:#E11D48;font-weight:800">${counts.high}</span> <span style="color:#64748B;font-weight:500">High</span> ·
+          <span style="color:#F59E0B;font-weight:800">${counts.elevated}</span> <span style="color:#64748B;font-weight:500">Elevated</span> ·
+          <span style="color:#10B981;font-weight:800">${counts.normal}</span> <span style="color:#64748B;font-weight:500">Normal</span>
+        </div>
+        <div class="summary-sub">across ${(counts.high+counts.elevated+counts.normal).toLocaleString()} locations</div>
+      </div>
     </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">Model Controls (What-if)</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('model-controls-body').classList.toggle('hidden')">Toggle</button>
+          <button class="btn btn-sm btn-secondary" onclick="resetModel()">Reset</button>
+        </div>
+      </div>
+      <div class="card-body" id="model-controls-body" style="padding:16px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+
+          <div>
+            <div class="filter-label" style="margin-bottom:6px">PTO / Availability</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="range" min="50" max="100" step="1" value="${Math.round(MODEL.ptoFactor*100)}" oninput="document.getElementById('pto-val').textContent=this.value+'%'; setModel('ptoFactor', this.value/100)" style="flex:1">
+              <span id="pto-val" style="font-weight:700">${Math.round(MODEL.ptoFactor*100)}%</span>
+            </div>
+            <div class="text-muted" style="margin-top:6px">Effective CMs = Raw CMs × PTO factor</div>
+          </div>
+
+          <div>
+            <div class="filter-label" style="margin-bottom:6px">Capacity per CM</div>
+            <input type="number" min="1" max="12" step="1" value="${MODEL.meetingEqPerDay}" oninput="setModel('meetingEqPerDay', this.value)">
+            <div class="text-muted" style="margin-top:6px">Meeting-equivalents per CM per day</div>
+          </div>
+
+          <div>
+            <div class="filter-label" style="margin-bottom:6px">Risk Thresholds</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div>
+                <div class="text-muted" style="font-size:11px">Elevated ≥</div>
+                <input type="number" min="0.2" max="0.95" step="0.01" value="${MODEL.thrElevated}" oninput="setModel('thrElevated', this.value)">
+              </div>
+              <div>
+                <div class="text-muted" style="font-size:11px">High ></div>
+                <input type="number" min="0.3" max="2" step="0.01" value="${MODEL.thrHigh}" oninput="setModel('thrHigh', this.value)">
+              </div>
+            </div>
+            <div class="text-muted" style="margin-top:6px">Utilization = Load ÷ Capacity</div>
+          </div>
+
+          <div>
+            <div class="filter-label" style="margin-bottom:6px">Weights</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div><div class="text-muted" style="font-size:11px">Meeting</div><input type="number" step="0.1" value="${MODEL.wMeeting}" oninput="setModel('wMeeting', this.value)"></div>
+              <div><div class="text-muted" style="font-size:11px">Event</div><input type="number" step="0.1" value="${MODEL.wEvent}" oninput="setModel('wEvent', this.value)"></div>
+              <div><div class="text-muted" style="font-size:11px">VIP</div><input type="number" step="0.1" value="${MODEL.wVip}" oninput="setModel('wVip', this.value)"></div>
+              <div><div class="text-muted" style="font-size:11px">Catering</div><input type="number" step="0.1" value="${MODEL.wCatering}" oninput="setModel('wCatering', this.value)"></div>
+              <div><div class="text-muted" style="font-size:11px">Traveler</div><input type="number" step="0.1" value="${MODEL.wTraveler}" oninput="setModel('wTraveler', this.value)"></div>
+              <div><div class="text-muted" style="font-size:11px">Attendee divisor</div><input type="number" min="25" max="300" step="1" value="${MODEL.attendeeDivisor}" oninput="setModel('attendeeDivisor', this.value)"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="filter-label" style="margin-bottom:6px">Overrides</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div>
+                <div class="text-muted" style="font-size:11px">VIP trigger (bad-day)</div>
+                <input type="number" min="1" max="10" step="1" value="${MODEL.vipTrigger}" oninput="setModel('vipTrigger', this.value)">
+              </div>
+              <div>
+                <div class="text-muted" style="font-size:11px">High meetings</div>
+                <div class="text-muted" style="margin-top:8px">Meetings > (Effective CMs × ${MODEL.meetingEqPerDay})</div>
+              </div>
+            </div>
+            <div class="text-muted" style="margin-top:6px">Back-to-back events and event stacking are always High Risk</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">Executive Risk Radar (Peak Day by Site)</div>
+        <div class="text-muted">Capacity = (# CMs × ${Math.round(MODEL.ptoFactor*100)}%) × ${MODEL.meetingEqPerDay} meeting-equivalents/day · Utilization = Load ÷ Capacity</div>
+      </div>
+      <div style="max-height:420px;overflow-y:auto">
+        <table class="upcoming-table">
+          <thead>
+            <tr>
+              <th>Site</th>
+              <th>Status</th>
+              <th style="text-align:right">Peak Util</th>
+              <th style="text-align:right">Peak Load</th>
+              <th style="text-align:right">Capacity</th>
+              <th>Key Drivers</th>
+              <th>Peak Day</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${riskRows || `<tr><td colspan="7" class="empty-state">No records match filters.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">Location Busyness · Next 6 Weeks</div>
@@ -1177,13 +1553,15 @@ function renderOverview(recs) {
       </div>
       <div class="card-body" id="heatmap-wrap" style="overflow-x:auto"></div>
     </div>
+
     <div class="card">
       <div class="card-header"><div class="card-title">Next 7 Days</div><div class="text-muted">${next7.total.toLocaleString()} records</div></div>
       <div class="card-body" style="padding:0">${next7.html}</div>
-    </div>`;
+    </div>
+  `;
+
   updateHeatmap(recs);
 }
-
 function nextNDayDigest(recs, n) {
   const today = todayStr();
   const days = Array.from({length:n},(_,i)=>addDays(today,i));

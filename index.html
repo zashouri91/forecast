@@ -1383,133 +1383,135 @@ function countBy(recs, key) {
 }
 
 // ── TAB RENDERERS ──────────────────────────────────────────────────────────
+
+function renderWeekAheadGrid(recs, stats) {
+  const today = todayStr();
+  const days = Array.from({length: 7}, (_, i) => addDays(today, i));
+  const locations = REF() ? REF().sites.map(s => s.siteName)
+    : [...new Set(recs.map(r => r._canonicalSite || r.site).filter(Boolean))].sort();
+
+  if (!locations.length) {
+    return '<div class="empty-state" style="padding:32px">Upload data to see the week-ahead capacity view.</div>';
+  }
+
+  const hasData = recs.length > 0;
+
+  const dayMeta = days.map(d => {
+    const dt = new Date(d + 'T12:00:00');
+    return {
+      d,
+      weekday: dt.toLocaleString('default', {weekday: 'short'}),
+      mmdd: `${dt.getMonth()+1}/${dt.getDate()}`,
+      isToday: d === today,
+      isWeekend: dt.getDay() === 0 || dt.getDay() === 6,
+    };
+  });
+
+  // Week-level summary: count locations at each risk level for the week
+  const weekCounts = { high: 0, elevated: 0, ok: 0 };
+  locations.forEach(loc => {
+    let worst = 'ok';
+    days.forEach(d => {
+      const row = stats[loc]?.[d];
+      if (!row) return;
+      const s = row.flags?.status || riskStatus(row.util, false);
+      if (s === 'high') worst = 'high';
+      else if (s === 'elevated' && worst !== 'high') worst = 'elevated';
+    });
+    weekCounts[worst]++;
+  });
+
+  const C = {
+    high:     { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B', label: 'High' },
+    elevated: { bg: '#FFFBEB', border: '#FDE68A', text: '#92400E', label: 'Busy' },
+    normal:   { bg: '#F0FDF4', border: '#BBF7D0', text: '#065F46', label: 'OK' },
+  };
+
+  let html = `<div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;min-width:520px">
+      <thead><tr>
+        <th style="text-align:left;padding:8px 14px 10px;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #E2E8F0;min-width:130px">Location</th>
+        ${dayMeta.map(h => `
+          <th style="text-align:center;padding:8px 4px 10px;min-width:82px;border-bottom:2px solid ${h.isToday ? '#4338CA' : '#E2E8F0'};background:${h.isToday ? '#F5F3FF' : 'transparent'}">
+            <div style="font-size:11px;font-weight:700;color:${h.isToday ? '#4338CA' : h.isWeekend ? '#94A3B8' : '#374151'}">${h.weekday}</div>
+            <div style="font-size:11px;color:${h.isToday ? '#6366F1' : h.isWeekend ? '#CBD5E1' : '#94A3B8'}">${h.mmdd}</div>
+          </th>`).join('')}
+      </tr></thead>
+      <tbody>`;
+
+  locations.forEach((loc, idx) => {
+    html += `<tr style="background:${idx%2===0?'#FAFAFA':'#FFFFFF'}">`;
+    html += `<td style="padding:10px 14px;font-size:13px;font-weight:600;color:#1E293B;white-space:nowrap;border-bottom:1px solid #F1F5F9">${escapeHtml(loc)}</td>`;
+    dayMeta.forEach(h => {
+      const row = stats[loc]?.[h.d];
+      const tdStyle = `padding:6px 4px;border-bottom:1px solid #F1F5F9;text-align:center;${h.isToday ? 'background:#F5F3FF;' : ''}`;
+      const hasActivity = row && (row.meetings || row.events || row.travelers);
+      if (!hasActivity) {
+        const inner = hasData
+          ? `<span style="font-size:12px;color:#CBD5E1;font-weight:500">—</span>`
+          : '';
+        html += `<td style="${tdStyle}">${inner}</td>`;
+        return;
+      }
+      const status = row.flags?.status || riskStatus(row.util, false);
+      const c = C[status] || C.normal;
+      const utilPct = Math.round(row.util * 100);
+      const cap = dailyCapacity(loc);
+      const parts = [];
+      if (row.events)    parts.push(`${row.events} event${row.events>1?'s':''}`);
+      if (row.meetings)  parts.push(`${row.meetings} mtg`);
+      if (row.travelers) parts.push(`${row.travelers} traveler${row.travelers>1?'s':''}`);
+      const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% utilized · ${parts.join(' · ')}${cap ? ` · Capacity ${cap.toFixed(1)}` : ''}`);
+      html += `<td style="${tdStyle}" title="${tip}">
+        <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;background:${c.bg};border:1px solid ${c.border};border-radius:6px;padding:5px 6px;min-width:58px">
+          <span style="font-size:13px;font-weight:700;color:${c.text};line-height:1">${utilPct}%</span>
+          <span style="font-size:9px;font-weight:600;color:${c.text};opacity:.8;line-height:1;text-transform:uppercase;letter-spacing:.04em">${c.label}</span>
+        </div>
+      </td>`;
+    });
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table></div>
+  <div style="display:flex;gap:16px;margin-top:12px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:11px;color:#64748B;font-weight:600">Key:</span>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:2px"></div><span style="font-size:11px;color:#64748B">OK &lt;${Math.round(MODEL.thrElevated*100)}%</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:2px"></div><span style="font-size:11px;color:#64748B">Busy ${Math.round(MODEL.thrElevated*100)}–${Math.round(MODEL.thrHigh*100)}%</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:2px"></div><span style="font-size:11px;color:#64748B">High &gt;${Math.round(MODEL.thrHigh*100)}%</span></div>
+    <span style="font-size:11px;color:#94A3B8;margin-left:4px">— = no activity · Utilization = Load ÷ (CMs × ${Math.round(MODEL.ptoFactor*100)}% avail × ${MODEL.meetingEqPerDay} tasks/day)</span>
+  </div>`;
+
+  return { html, weekCounts };
+}
+
 function renderOverview(recs) {
   const mtg = recs.filter(r => r._type === 'meeting').length;
   const evt = recs.filter(r => r._type === 'event').length;
   const rsv = recs.filter(r => r._type === 'space' || r._type === 'traveler').length;
 
-  // Executive Risk Radar: peak-day risk per location. Records are already
-  // date/site-filtered upstream by getTabFiltered() + applyMappings().
   const stats = buildSiteDayStats(recs);
-  const sites = (REF() ? REF().sites.map(s => s.siteName) : Object.keys(stats)).slice();
-
-  const sevRank = { high: 0, elevated: 1, normal: 2 };
-  const siteSummaries = sites.map(site => {
-    const days = stats[site] ? Object.values(stats[site]) : [];
-    if (!days.length) {
-      return { site, status: 'normal', sevRank: sevRank.normal, peakUtil: 0, peakDate: '', peakRow: null, drivers: '—', loadValue: 0, capacityValue: dailyCapacity(site) };
-    }
-    days.sort((a,b) => (b.util - a.util) || (a.date < b.date ? -1 : 1));
-    const peak = days[0];
-    const status = peak.flags?.status || riskStatus(peak.util, false);
-    return { site, status, sevRank: sevRank[status], peakUtil: peak.util, peakDate: peak.date, peakRow: peak, drivers: topDrivers(peak), loadValue: peak.load, capacityValue: peak.capacity };
-  });
-
-  const counts = { high:0, elevated:0, normal:0 };
-  siteSummaries.forEach(s => { counts[s.status] = (counts[s.status]||0)+1; });
-
-  const radarColumns = [
-    { label:'Location',   get:s=>s.site,       cell:s=>`<div style="font-weight:700">${statusLabel(s.status).icon}${escapeHtml(s.site)}</div>` },
-    { label:'Status',     get:s=>s.sevRank,    cell:s=>`<span class="status-badge ${statusLabel(s.status).badge}">${statusLabel(s.status).txt}</span>` },
-    { label:'Peak Util',  get:s=>s.peakUtil,   cell:s=>s.peakRow ? pct(s.peakUtil) : '—' },
-    { label:'Peak Load',  get:s=>s.loadValue,  cell:s=>s.peakRow ? s.loadValue.toFixed(1) : '—' },
-    { label:'Capacity',   get:s=>s.capacityValue, cell:s=>s.capacityValue ? s.capacityValue.toFixed(1) : '—' },
-    { label:'Key Drivers',get:s=>s.drivers,    cell:s=>`<div style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(s.drivers)}">${escapeHtml(s.drivers)}</div>` },
-    { label:'Peak Day',   get:s=>s.peakDate||'', cell:s=>s.peakDate||'—' },
-  ];
-
-  const next7 = nextNDayDigest(recs, 7);
+  const { html: weekGridHtml, weekCounts } = renderWeekAheadGrid(recs, stats);
 
   document.getElementById('tab-panel').innerHTML = `
     <div class="summary-grid">
       <div class="summary-card" data-tone="indigo"><div class="summary-label">Meetings</div><div class="summary-value">${mtg.toLocaleString()}</div><div class="summary-sub">in date range</div></div>
       <div class="summary-card" data-tone="rose"><div class="summary-label">Events</div><div class="summary-value">${evt.toLocaleString()}</div><div class="summary-sub">planned</div></div>
       <div class="summary-card" data-tone="teal"><div class="summary-label">Reservations</div><div class="summary-value">${rsv.toLocaleString()}</div><div class="summary-sub">workspaces and travelers</div></div>
-      <div class="summary-card" data-tone="amber"><div class="summary-label">Portfolio Risk</div>
-        <div class="summary-value" style="font-size:16px;line-height:1.2">
-          <span style="color:#E11D48;font-weight:800">${counts.high}</span> <span style="color:#64748B;font-weight:500">High</span> ·
-          <span style="color:#F59E0B;font-weight:800">${counts.elevated}</span> <span style="color:#64748B;font-weight:500">Elevated</span> ·
-          <span style="color:#10B981;font-weight:800">${counts.normal}</span> <span style="color:#64748B;font-weight:500">Normal</span>
+      <div class="summary-card" data-tone="amber">
+        <div class="summary-label">This Week</div>
+        <div class="summary-value" style="font-size:16px;line-height:1.4">
+          <span style="color:#E11D48;font-weight:800">${weekCounts.high}</span><span style="color:#94A3B8;font-size:13px;font-weight:400"> high &nbsp;</span><span style="color:#F59E0B;font-weight:800">${weekCounts.elevated}</span><span style="color:#94A3B8;font-size:13px;font-weight:400"> busy &nbsp;</span><span style="color:#10B981;font-weight:800">${weekCounts.ok}</span><span style="color:#94A3B8;font-size:13px;font-weight:400"> ok</span>
         </div>
-        <div class="summary-sub">across ${(counts.high+counts.elevated+counts.normal).toLocaleString()} locations</div>
+        <div class="summary-sub">locations by peak day this week</div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">Model Controls (What-if)</div>
-        <div style="display:flex;gap:10px;align-items:center">
-          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('model-controls-body').classList.toggle('hidden')">Toggle</button>
-          <button class="btn btn-sm btn-secondary" onclick="resetModel()">Reset</button>
-        </div>
+        <div class="card-title">Week Ahead — Team Capacity</div>
+        <div class="text-muted">Utilization % per location per day · hover a cell for details</div>
       </div>
-      <div class="card-body" id="model-controls-body" style="padding:16px">
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;margin-bottom:16px">
-
-          <div>
-            <div class="filter-label" style="margin-bottom:8px">PTO / Availability</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <input type="range" min="50" max="100" step="1" value="${Math.round(MODEL.ptoFactor*100)}" oninput="document.getElementById('pto-val').textContent=this.value+'%'" onchange="setModel('ptoFactor', this.value/100)" style="flex:1">
-              <span id="pto-val" style="font-weight:700;min-width:36px;text-align:right">${Math.round(MODEL.ptoFactor*100)}%</span>
-            </div>
-            <div class="text-muted" style="margin-top:6px">Effective CMs = Raw CMs × PTO factor</div>
-          </div>
-
-          <div>
-            <div class="filter-label" style="margin-bottom:8px">Capacity per CM</div>
-            <input type="number" min="1" max="12" step="1" value="${MODEL.meetingEqPerDay}" onchange="setModel('meetingEqPerDay', this.value)" style="width:80px">
-            <div class="text-muted" style="margin-top:6px">Meeting-equivalents per CM per day</div>
-          </div>
-
-          <div>
-            <div class="filter-label" style="margin-bottom:8px">Risk Thresholds</div>
-            <div style="display:flex;gap:16px;align-items:flex-end">
-              <div>
-                <div class="text-muted" style="font-size:11px;margin-bottom:4px">Elevated ≥</div>
-                <input type="number" min="0.2" max="0.95" step="0.01" value="${MODEL.thrElevated}" onchange="setModel('thrElevated', this.value)" style="width:72px">
-              </div>
-              <div>
-                <div class="text-muted" style="font-size:11px;margin-bottom:4px">High &gt;</div>
-                <input type="number" min="0.3" max="2" step="0.01" value="${MODEL.thrHigh}" onchange="setModel('thrHigh', this.value)" style="width:72px">
-              </div>
-            </div>
-            <div class="text-muted" style="margin-top:6px">Utilization = Load ÷ Capacity</div>
-          </div>
-
-          <div>
-            <div class="filter-label" style="margin-bottom:8px">Load Weights</div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-              <div><div class="text-muted" style="font-size:11px;margin-bottom:3px">Meeting</div><input type="number" step="0.1" value="${MODEL.wMeeting}" onchange="setModel('wMeeting', this.value)" style="width:100%"></div>
-              <div><div class="text-muted" style="font-size:11px;margin-bottom:3px">Event</div><input type="number" step="0.1" value="${MODEL.wEvent}" onchange="setModel('wEvent', this.value)" style="width:100%"></div>
-              <div><div class="text-muted" style="font-size:11px;margin-bottom:3px">VIP</div><input type="number" step="0.1" value="${MODEL.wVip}" onchange="setModel('wVip', this.value)" style="width:100%"></div>
-              <div><div class="text-muted" style="font-size:11px;margin-bottom:3px">Catering</div><input type="number" step="0.1" value="${MODEL.wCatering}" onchange="setModel('wCatering', this.value)" style="width:100%"></div>
-              <div><div class="text-muted" style="font-size:11px;margin-bottom:3px">Traveler</div><input type="number" step="0.1" value="${MODEL.wTraveler}" onchange="setModel('wTraveler', this.value)" style="width:100%"></div>
-              <div><div class="text-muted" style="font-size:11px;margin-bottom:3px">Attendee ÷</div><input type="number" min="25" max="300" step="1" value="${MODEL.attendeeDivisor}" onchange="setModel('attendeeDivisor', this.value)" style="width:100%"></div>
-            </div>
-          </div>
-
-          <div>
-            <div class="filter-label" style="margin-bottom:8px">VIP Bad-Day Trigger</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <input type="number" min="1" max="10" step="1" value="${MODEL.vipTrigger}" onchange="setModel('vipTrigger', this.value)" style="width:72px">
-              <span class="text-muted">VIPs on same day</span>
-            </div>
-            <div class="text-muted" style="margin-top:6px">High Risk when: VIPs ≥ trigger AND events ≥ 1 AND meetings high</div>
-          </div>
-
-        </div>
-        <div style="border-top:1px solid #F1F5F9;padding-top:12px">
-          <span class="text-muted" style="font-size:11px">Auto-flags always High Risk: back-to-back events · event stacking (≥ 2 events/day) · event + high meetings combo · Meetings &gt; (Effective CMs × ${MODEL.meetingEqPerDay})</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-header">
-        <div class="card-title">Executive Risk Radar (Peak Day by Location)</div>
-        <div class="text-muted">Capacity = (# CMs × ${Math.round(MODEL.ptoFactor*100)}%) × ${MODEL.meetingEqPerDay} meeting-equivalents/day · Utilization = Load ÷ Capacity</div>
-      </div>
-      <div style="max-height:420px;overflow-y:auto">${renderSortableTable('riskRadar', siteSummaries, radarColumns)}</div>
+      <div class="card-body" style="padding:16px 16px 12px">${weekGridHtml}</div>
     </div>
 
     <div class="card" style="margin-bottom:20px">
@@ -1526,8 +1528,46 @@ function renderOverview(recs) {
     </div>
 
     <div class="card">
-      <div class="card-header"><div class="card-title">Next 7 Days</div><div class="text-muted">${next7.total.toLocaleString()} records</div></div>
-      <div class="card-body" style="padding:0">${next7.html}</div>
+      <div class="card-header">
+        <div class="card-title">Model Controls</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('model-controls-body').classList.toggle('hidden')">Toggle</button>
+          <button class="btn btn-sm btn-secondary" onclick="resetModel()">Reset</button>
+        </div>
+      </div>
+      <div id="model-controls-body" class="hidden">
+        <div class="card-body" style="padding:16px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px">
+            <div>
+              <div class="filter-label" style="margin-bottom:8px">CM Availability (PTO)</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="range" min="50" max="100" step="1" value="${Math.round(MODEL.ptoFactor*100)}" oninput="document.getElementById('pto-val').textContent=this.value+'%'" onchange="setModel('ptoFactor', this.value/100)" style="flex:1">
+                <span id="pto-val" style="font-weight:700;min-width:36px;text-align:right">${Math.round(MODEL.ptoFactor*100)}%</span>
+              </div>
+              <div class="text-muted" style="margin-top:6px">Fraction of CMs available on a typical day</div>
+            </div>
+            <div>
+              <div class="filter-label" style="margin-bottom:8px">Daily Capacity per CM</div>
+              <input type="number" min="1" max="20" step="1" value="${MODEL.meetingEqPerDay}" onchange="setModel('meetingEqPerDay', this.value)" style="width:72px">
+              <div class="text-muted" style="margin-top:6px">Tasks (meeting-equivalents) one CM handles per day</div>
+            </div>
+            <div>
+              <div class="filter-label" style="margin-bottom:8px">Risk Thresholds</div>
+              <div style="display:flex;gap:16px;align-items:flex-end">
+                <div>
+                  <div class="text-muted" style="font-size:11px;margin-bottom:4px">Busy ≥</div>
+                  <input type="number" min="0.2" max="0.95" step="0.05" value="${MODEL.thrElevated}" onchange="setModel('thrElevated', this.value)" style="width:68px">
+                </div>
+                <div>
+                  <div class="text-muted" style="font-size:11px;margin-bottom:4px">High &gt;</div>
+                  <input type="number" min="0.3" max="2" step="0.05" value="${MODEL.thrHigh}" onchange="setModel('thrHigh', this.value)" style="width:68px">
+                </div>
+              </div>
+              <div class="text-muted" style="margin-top:6px">Utilization = Load ÷ Capacity</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 

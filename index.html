@@ -503,7 +503,7 @@ const FIELD_ALIASES = {
   site:['site','location','pulse point location','building_name','location_name','location name','city','location_id','location id','spaces_location_id','spaces location id'],
   date:['date','start date','event date','start_time','arrival date','check-in date','meeting start date','helper date'],
   end_date:['end date','meeting end date','end_time','checkout time'],
-  event_name:['event name','meeting name','meeting or event name','pref_display_name','preferred display name','pref display name','reserved by','reservation name','traveler name'],
+  event_name:['event name','meeting name','meeting or event name','pref_display_name','preferred display name','pref display name','reserved by','reservation name','traveler name','traveler first name','first name','attendee name','guest name'],
   status:['status','mng approval status','valid'],
   attendees:['# guest','number of attendees','# attendees','num attendees','number of guests','reservation_duration','headcount','expected attendees','attendees'],
   vip:['vip','vips','vip attendee','vip attendees','vip name','vip names','executive','exec attendee','exec attending','principal','principals'],
@@ -683,6 +683,9 @@ function parseCSV(name, text) {
 // (e.g. LOCATION_ID is the PulsePoint join key, not BUILDING_NAME).
 const PREFERRED_ALIASES = {
   site: new Set(['location_id','location id','spaces_location_id','spaces location id']),
+  // Travelers files have both "Check-In Date" (usually empty for incoming travelers)
+  // and "Arrival Date" (the real arrival). Bias Arrival Date so it wins the tie.
+  date: new Set(['arrival date']),
 };
 
 function autoMap(columns) {
@@ -864,6 +867,14 @@ function applyMappings() {
     // ensure site resolution map is current for this file
     if (REF() && fi2idx.site !== undefined) buildSiteResolution(f);
     const resolution = f._siteResolution || new Map();
+    // Detect first/last name pair so we can render "First Last" as a single name.
+    let firstNameIdx=null, lastNameIdx=null;
+    columns.forEach((c,i)=>{
+      if(!c) return;
+      const lc=String(c).toLowerCase();
+      if(firstNameIdx===null && /(first name|firstname|given name)/.test(lc)) firstNameIdx=i;
+      if(lastNameIdx===null && /(last name|lastname|surname|family name)/.test(lc)) lastNameIdx=i;
+    });
     rows.slice(1).forEach(row=>{
       if(!row||row.every(c=>c===null||c==='')) return;
       const rec={_source:name,_type:recordType||'meeting'};
@@ -879,6 +890,14 @@ function applyMappings() {
         else val=val!=null&&val!==''?String(val).trim():'';
         rec[key]=val;
       });
+      // If event_name mapped to a first-name column and a last-name column exists,
+      // combine them so "Name" reads as "First Last" everywhere.
+      if (firstNameIdx!==null && lastNameIdx!==null && fi2idx.event_name===firstNameIdx) {
+        const fn = row[firstNameIdx], ln = row[lastNameIdx];
+        if (fn != null && String(fn).trim() && ln != null && String(ln).trim()) {
+          rec.event_name = `${String(fn).trim()} ${String(ln).trim()}`;
+        }
+      }
       if(!rec.date&&!rec.event_name) return;
       // enrich with reference data using the (possibly user-overridden) resolution
       if (REF() && rec.site) {
@@ -1258,7 +1277,8 @@ function buildDailyCapacityGrid(spaceRecs) {
 }
 
 function renderVipTravelersCard(travelers) {
-  const vips = travelers.filter(hasVip);
+  // Per spec: every traveler in the Travelers file is treated as a VIP.
+  const vips = travelers;
   return `<div class="card" style="margin-bottom:20px">
     <div class="card-header">
       <div class="card-title">⭐ VIP Travelers</div>
@@ -1269,7 +1289,7 @@ function renderVipTravelersCard(travelers) {
         { label:'Name',     get:r=>r.event_name||r.vip||'', cell:r=>`<div style="font-weight:600">${escapeHtml(r.event_name||r.vip||'—')}</div>` },
         { label:'Location', get:r=>r._canonicalSite||r.site||'', cell:r=>r._canonicalSite||r.site||'—' },
         { label:'Date',     get:r=>r.date, cell:fmtDateCell },
-      ]) : '<div class="empty-state">No VIP travelers in range. Map the VIP column on a Travelers file to populate.</div>'
+      ]) : '<div class="empty-state">No travelers in range. Upload a Travelers file to populate.</div>'
     }</div>
   </div>`;
 }

@@ -487,7 +487,7 @@ const filterState = { sites:new Set(['all']), regions:new Set(['all']), cms:new 
 let charts = {};
 let heatmapMode = 'count'; // 'count' | 'pct_primary_seats' | 'pct_expected_usage' | 'vs_tt_baseline'
 let activeTab = 'overview';
-const tableSort = { workspace:{col:0,dir:1}, meetings:{col:0,dir:1}, events:{col:0,dir:1}, wsDaily:{col:0,dir:1}, vipTravelers:{col:2,dir:1} };
+const tableSort = { workspace:{col:0,dir:1}, meetings:{col:0,dir:1}, events:{col:0,dir:1}, wsDaily:{col:0,dir:1}, vipTravelers:{col:2,dir:1}, riskRadar:{col:1,dir:1} };
 
 const STANDARD_FIELDS = [
   {key:'site',label:'Site / Location',required:true},
@@ -721,17 +721,23 @@ function removeFile(name) { state.files=state.files.filter(f=>f.name!==name); re
 
 function renderFileList() {
   document.getElementById('file-list').innerHTML = state.files.map(f=>{
-    const tid=f.name.replace(/[^a-z0-9]/gi,'_');
+    const nameJs = jsString(f.name);
     return `<div class="file-card">
-      <button class="file-remove" onclick="removeFile('${f.name.replace(/'/g,"\\'")}')">×</button>
+      <button class="file-remove" onclick="removeFile('${nameJs}')">×</button>
       <div class="file-card-header">
         <div class="file-icon ${f.type}">${f.type==='csv'?'CSV':'XLSX'}</div>
-        <div><div class="file-name">${f.name}</div><div class="file-meta">${f.rowCount.toLocaleString()} rows · ${f.columns.length} cols</div></div>
+        <div><div class="file-name">${escapeHtml(f.name)}</div><div class="file-meta">${f.rowCount.toLocaleString()} rows · ${f.columns.length} cols</div></div>
       </div>
-      ${f.sheets.length>1?`<div style="margin-top:10px"><select onchange="changeSheet('${f.name.replace(/'/g,"\\'")}',this.value)">${f.sheets.map(s=>`<option ${s===f.selectedSheet?'selected':''}>${s}</option>`).join('')}</select></div>`:''}
-      <div class="file-type-badges">${RECORD_TYPES.map(r=>`<span class="badge ${r.badge}" style="${f.recordType!==r.value?'opacity:.35':''}" onclick="setRecordType('${f.name.replace(/'/g,"\\'")}','${r.value}')">${r.label}</span>`).join('')}</div>
+      ${f.sheets.length>1?`<div style="margin-top:10px"><select onchange="changeSheet('${nameJs}',this.value)">${f.sheets.map(s=>`<option ${s===f.selectedSheet?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select></div>`:''}
+      <div class="file-type-badges">${RECORD_TYPES.map(r=>`<span class="badge ${r.badge}" style="${f.recordType!==r.value?'opacity:.35':''}" onclick="setRecordType('${nameJs}','${r.value}')">${escapeHtml(r.label)}</span>`).join('')}</div>
     </div>`;
   }).join('');
+}
+
+// JS-string escape for values embedded inside inline onclick="..." handlers.
+// (escapeHtml handles the attribute layer; jsString protects the JS-string layer.)
+function jsString(s) {
+  return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 function changeSheet(name,sheet) {
@@ -755,7 +761,7 @@ function renderMappings() {
       <div class="card-header">
         <div>
           <div style="font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px">
-            ${f.name} <span class="badge ${typeInfo.badge}">${typeInfo.label}</span>
+            ${escapeHtml(f.name)} <span class="badge ${typeInfo.badge}">${escapeHtml(typeInfo.label)}</span>
             <span class="text-muted" style="font-weight:400">${f.rowCount.toLocaleString()} rows</span>
           </div>
           <div style="font-size:12px;color:#64748B;margin-top:3px">Map each column to a standard field · ignore anything not needed</div>
@@ -769,11 +775,11 @@ function renderMappings() {
             const sample=preview[ci]!=null?String(preview[ci]).substring(0,60):'—';
             const mapped=f.mappings[col];
             return `<tr>
-              <td><div style="font-weight:600;font-size:12px">${col||'(empty)'}</div></td>
-              <td><div class="col-preview">${sample}</div></td>
-              <td><select onchange="updateMapping(${fi},'${col.replace(/'/g,"\\'").replace(/"/g,'&quot;')}',this.value)">
+              <td><div style="font-weight:600;font-size:12px">${escapeHtml(col||'(empty)')}</div></td>
+              <td><div class="col-preview">${escapeHtml(sample)}</div></td>
+              <td><select onchange="updateMapping(${fi},'${jsString(col)}',this.value)">
                 <option value="">— Ignore —</option>
-                ${STANDARD_FIELDS.map(sf=>`<option value="${sf.key}"${mapped===sf.key?' selected':''}>${sf.label}${sf.required?' *':''}</option>`).join('')}
+                ${STANDARD_FIELDS.map(sf=>`<option value="${sf.key}"${mapped===sf.key?' selected':''}>${escapeHtml(sf.label)}${sf.required?' *':''}</option>`).join('')}
               </select></td>
               <td>${mapped?'<span class="auto-badge">AUTO</span>':'<span style="font-size:10px;color:#CBD5E1">–</span>'}</td>
             </tr>`;
@@ -1037,7 +1043,7 @@ function siteKey(r) {
   return (r._canonicalSite || r.site || '').toString();
 }
 
-function buildSiteDayStats(records, from, to) {
+function buildSiteDayStats(records) {
   const stats = {};
   const add = (site, date) => {
     stats[site] = stats[site] || {};
@@ -1217,28 +1223,28 @@ function renderDashboard() {
             <div class="filter-label">Location</div>
             <div class="filter-chips" id="fc-sites">
               <span class="chip active" onclick="toggleChip(this,'site','all')">All</span>
-              ${sites.map(s=>`<span class="chip${filterState.sites.has(s)?' active':''}" onclick="toggleChip(this,'site','${s.replace(/'/g,"\\'")}')">  ${s}</span>`).join('')}
+              ${sites.map(s=>`<span class="chip${filterState.sites.has(s)?' active':''}" onclick="toggleChip(this,'site','${jsString(s)}')">${escapeHtml(s)}</span>`).join('')}
             </div>
           </div>
           ${regions.length ? `<div class="filter-group" id="fg-regions">
             <div class="filter-label">Regional Leader</div>
             <div class="filter-chips" id="fc-regions">
               <span class="chip active" onclick="toggleChip(this,'region','all')">All</span>
-              ${regions.map(r=>`<span class="chip${filterState.regions.has(r)?' active':''}" onclick="toggleChip(this,'region','${r.replace(/'/g,"\\'")}')">  ${r}</span>`).join('')}
+              ${regions.map(r=>`<span class="chip${filterState.regions.has(r)?' active':''}" onclick="toggleChip(this,'region','${jsString(r)}')">${escapeHtml(r)}</span>`).join('')}
             </div>
           </div>` : ''}
           <div class="filter-group" id="fg-cms">
             <div class="filter-label">CM Captain</div>
             <div class="filter-chips" id="fc-cms">
               <span class="chip active" onclick="toggleChip(this,'cm','all')">All</span>
-              ${cms.slice(0,40).map(c=>`<span class="chip${filterState.cms.has(c)?' active':''}" onclick="toggleChip(this,'cm','${c.replace(/'/g,"\\'")}')">  ${c}</span>`).join('')}
+              ${cms.slice(0,40).map(c=>`<span class="chip${filterState.cms.has(c)?' active':''}" onclick="toggleChip(this,'cm','${jsString(c)}')">${escapeHtml(c)}</span>`).join('')}
             </div>
           </div>
           <div class="filter-group" id="fg-statuses">
             <div class="filter-label">Status</div>
             <div class="filter-chips" id="fc-statuses">
               <span class="chip active" onclick="toggleChip(this,'status','all')">All</span>
-              ${statuses.slice(0,12).map(s=>`<span class="chip${filterState.statuses.has(s)?' active':''}" onclick="toggleChip(this,'status','${s.replace(/'/g,"\\'")}')">  ${s}</span>`).join('')}
+              ${statuses.slice(0,12).map(s=>`<span class="chip${filterState.statuses.has(s)?' active':''}" onclick="toggleChip(this,'status','${jsString(s)}')">${escapeHtml(s)}</span>`).join('')}
             </div>
           </div>
           <button class="btn btn-sm btn-secondary" style="width:100%;justify-content:center;margin-top:4px" onclick="clearFilters()">Clear Filters</button>
@@ -1384,48 +1390,35 @@ function renderOverview(recs) {
   const evt = recs.filter(r => r._type === 'event').length;
   const rsv = recs.filter(r => r._type === 'space' || r._type === 'traveler').length;
 
-  const from = document.getElementById('f-from')?.value || '';
-  const to = document.getElementById('f-to')?.value || '';
-
-  // Executive Risk Radar: peak-day risk per site in the selected date window
-  const stats = buildSiteDayStats(recs, from, to);
+  // Executive Risk Radar: peak-day risk per location. Records are already
+  // date/site-filtered upstream by getTabFiltered() + applyMappings().
+  const stats = buildSiteDayStats(recs);
   const sites = (REF() ? REF().sites.map(s => s.siteName) : Object.keys(stats)).slice();
 
+  const sevRank = { high: 0, elevated: 1, normal: 2 };
   const siteSummaries = sites.map(site => {
     const days = stats[site] ? Object.values(stats[site]) : [];
     if (!days.length) {
-      return { site, status: 'normal', peakUtil: 0, peakDate: '', peakRow: null, drivers: '—' };
+      return { site, status: 'normal', sevRank: sevRank.normal, peakUtil: 0, peakDate: '', peakRow: null, drivers: '—', loadValue: 0, capacityValue: dailyCapacity(site) };
     }
     days.sort((a,b) => (b.util - a.util) || (a.date < b.date ? -1 : 1));
     const peak = days[0];
     const status = peak.flags?.status || riskStatus(peak.util, false);
-    return { site, status, peakUtil: peak.util, peakDate: peak.date, peakRow: peak, drivers: topDrivers(peak) };
+    return { site, status, sevRank: sevRank[status], peakUtil: peak.util, peakDate: peak.date, peakRow: peak, drivers: topDrivers(peak), loadValue: peak.load, capacityValue: peak.capacity };
   });
 
   const counts = { high:0, elevated:0, normal:0 };
   siteSummaries.forEach(s => { counts[s.status] = (counts[s.status]||0)+1; });
 
-  const sevRank = { high: 0, elevated: 1, normal: 2 };
-  siteSummaries.sort((a,b) => (sevRank[a.status]-sevRank[b.status]) || (b.peakUtil-a.peakUtil) || a.site.localeCompare(b.site));
-
-  const riskRows = siteSummaries.map(s => {
-    const meta = statusLabel(s.status);
-    const utilTxt = s.peakRow ? pct(s.peakUtil) : '—';
-    const cap = s.peakRow ? s.peakRow.capacity : dailyCapacity(s.site);
-    const capTxt = cap ? cap.toFixed(1) : '—';
-    const loadTxt = s.peakRow ? s.peakRow.load.toFixed(1) : '—';
-    return `
-      <tr>
-        <td style="font-weight:700">${meta.icon} ${s.site}</td>
-        <td><span class="status-badge ${meta.badge}">${meta.txt}</span></td>
-        <td style="text-align:right;font-weight:700">${utilTxt}</td>
-        <td style="text-align:right">${loadTxt}</td>
-        <td style="text-align:right" class="text-muted">${capTxt}</td>
-        <td><div style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(s.drivers)}">${escapeHtml(s.drivers)}</div></td>
-        <td style="white-space:nowrap" class="text-muted">${s.peakDate || '—'}</td>
-      </tr>
-    `;
-  }).join('');
+  const radarColumns = [
+    { label:'Location',   get:s=>s.site,       cell:s=>`<div style="font-weight:700">${statusLabel(s.status).icon}${escapeHtml(s.site)}</div>` },
+    { label:'Status',     get:s=>s.sevRank,    cell:s=>`<span class="status-badge ${statusLabel(s.status).badge}">${statusLabel(s.status).txt}</span>` },
+    { label:'Peak Util',  get:s=>s.peakUtil,   cell:s=>s.peakRow ? pct(s.peakUtil) : '—' },
+    { label:'Peak Load',  get:s=>s.loadValue,  cell:s=>s.peakRow ? s.loadValue.toFixed(1) : '—' },
+    { label:'Capacity',   get:s=>s.capacityValue, cell:s=>s.capacityValue ? s.capacityValue.toFixed(1) : '—' },
+    { label:'Key Drivers',get:s=>s.drivers,    cell:s=>`<div style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(s.drivers)}">${escapeHtml(s.drivers)}</div>` },
+    { label:'Peak Day',   get:s=>s.peakDate||'', cell:s=>s.peakDate||'—' },
+  ];
 
   const next7 = nextNDayDigest(recs, 7);
 
@@ -1518,27 +1511,10 @@ function renderOverview(recs) {
 
     <div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">Executive Risk Radar (Peak Day by Site)</div>
+        <div class="card-title">Executive Risk Radar (Peak Day by Location)</div>
         <div class="text-muted">Capacity = (# CMs × ${Math.round(MODEL.ptoFactor*100)}%) × ${MODEL.meetingEqPerDay} meeting-equivalents/day · Utilization = Load ÷ Capacity</div>
       </div>
-      <div style="max-height:420px;overflow-y:auto">
-        <table class="upcoming-table">
-          <thead>
-            <tr>
-              <th>Site</th>
-              <th>Status</th>
-              <th style="text-align:right">Peak Util</th>
-              <th style="text-align:right">Peak Load</th>
-              <th style="text-align:right">Capacity</th>
-              <th>Key Drivers</th>
-              <th>Peak Day</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${riskRows || `<tr><td colspan="7" class="empty-state">No records match filters.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
+      <div style="max-height:420px;overflow-y:auto">${renderSortableTable('riskRadar', siteSummaries, radarColumns)}</div>
     </div>
 
     <div class="card" style="margin-bottom:20px">
@@ -1631,7 +1607,7 @@ function renderWorkspace(recs) {
       <div class="summary-card" data-tone="indigo"><div class="summary-label">Total Reservations</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">${space.length.toLocaleString()} workspace · ${trv.length.toLocaleString()} traveler</div></div>
       <div class="summary-card" data-tone="emerald"><div class="summary-label">Average Daily Occupancy</div><div class="summary-value">${overallUtil.display}</div><div class="summary-sub">${overallUtil.sub}</div></div>
       <div class="summary-card" data-tone="teal"><div class="summary-label">Traveler Arrivals</div><div class="summary-value">${trv.length.toLocaleString()}</div><div class="summary-sub">incoming in range</div></div>
-      <div class="summary-card" data-tone="amber"><div class="summary-label">Peak Day</div><div class="summary-value" style="font-size:16px;line-height:1.2">${topRow?topRow.site:'—'}</div><div class="summary-sub">${topRow?topRow.date+' · '+topRow.totalReserved.toLocaleString()+' reservations':'no data'}</div></div>
+      <div class="summary-card" data-tone="amber"><div class="summary-label">Peak Day</div><div class="summary-value" style="font-size:16px;line-height:1.2">${topRow?escapeHtml(topRow.site):'—'}</div><div class="summary-sub">${topRow?escapeHtml(topRow.date)+' · '+topRow.totalReserved.toLocaleString()+' reservations':'no data'}</div></div>
     </div>
     <div class="card" style="margin-bottom:20px">
       <div class="card-header">
@@ -1647,12 +1623,12 @@ function renderWorkspace(recs) {
         { label:'Date',             get:r=>r.date,        cell:fmtDateCell },
         { label:'Location',         get:r=>r._canonicalSite||r.site||'' },
         { label:'State',            get:r=>r._state||'' },
-        { label:'Reservation Type', get:r=>r._type,       cell:r=>`<span class="badge ${RECORD_TYPES.find(x=>x.value===r._type)?.badge||'badge-meeting'}">${RECORD_TYPES.find(x=>x.value===r._type)?.label||r._type}</span>` },
-        { label:'Space / Amenity',  get:r=>r.event_type||'', cell:r=>r.event_type||'—' },
-        { label:'Person',           get:r=>r.event_name||r.room||'', cell:r=>`<div style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||r.room||'')}">${r.event_name||r.room||'—'}</div>` },
+        { label:'Reservation Type', get:r=>r._type,       cell:r=>{ const t=RECORD_TYPES.find(x=>x.value===r._type); return `<span class="badge ${t?.badge||'badge-meeting'}">${escapeHtml(t?.label||r._type||'')}</span>`; } },
+        { label:'Space / Amenity',  get:r=>r.event_type||'', cell:r=>r.event_type?escapeHtml(r.event_type):'—' },
+        { label:'Person',           get:r=>r.event_name||r.room||'', cell:r=>`<div style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||r.room||'')}">${escapeHtml(r.event_name||r.room||'—')}</div>` },
         { label:'Room',             get:r=>r.room||'' },
         { label:'CM Captain',       get:r=>r.cm_captain||'' },
-        { label:'Status',           get:r=>r.status||'',  cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${r.status}</span>`:'—' },
+        { label:'Status',           get:r=>r.status||'',  cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${escapeHtml(r.status)}</span>`:'—' },
       ])}</div>
     </div>`;
 }
@@ -1700,7 +1676,7 @@ function renderVipTravelersCard(travelers) {
     <div style="max-height:360px;overflow-y:auto">${
       vips.length ? renderSortableTable('vipTravelers', vips, [
         { label:'Name',         get:r=>r.event_name||r.vip||'', cell:r=>`<div style="font-weight:600">${escapeHtml(r.event_name||r.vip||'—')}</div>` },
-        { label:'Location',     get:r=>r._canonicalSite||r.site||'', cell:r=>r._canonicalSite||r.site||'—' },
+        { label:'Location',     get:r=>r._canonicalSite||r.site||'', cell:r=>escapeHtml(r._canonicalSite||r.site||'—') },
         { label:'Arrival Date', get:r=>r.date, cell:fmtDateCell },
       ]) : '<div class="empty-state">No travelers in range. Upload a Travelers file to populate.</div>'
     }</div>
@@ -1721,8 +1697,8 @@ function renderDailyCapacityTable(rows) {
   };
   const columns = [
     { label:'Date',             get:r=>r.date, cell:r=>fmtDateCell(r) },
-    { label:'Location',         get:r=>r.site },
-    { label:'State',            get:r=>r.state||'', cell:r=>r.state||'—' },
+    { label:'Location',         get:r=>r.site, cell:r=>`<div style="font-weight:600">${escapeHtml(r.site||'—')}</div>` },
+    { label:'State',            get:r=>r.state||'', cell:r=>escapeHtml(r.state||'—') },
     { label:'Workstations',     get:r=>r.workstations,    cell:r=>cell(r.workstations,    r.capacity?.workstations) },
     { label:'Private Offices',  get:r=>r.privateOffices,  cell:r=>cell(r.privateOffices,  r.capacity?.privateOffices) },
     { label:'Capsules',         get:r=>r.capsules,        cell:r=>cell(r.capsules,        r.capacity?.capsules) },
@@ -1744,7 +1720,7 @@ function renderMeetings(recs) {
       <div class="summary-card" data-tone="indigo"><div class="summary-label">Total Meetings</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">in date range</div></div>
       <div class="summary-card" data-tone="teal"><div class="summary-label">Total Attendees</div><div class="summary-value">${att.toLocaleString()}</div><div class="summary-sub">average ${avgAtt.toFixed(1)} per meeting</div></div>
       <div class="summary-card" data-tone="amber"><div class="summary-label">VIP Meetings</div><div class="summary-value">${vipMtgs.toLocaleString()}</div><div class="summary-sub">${recs.length?Math.round(100*vipMtgs/recs.length)+'% of meetings':'no data'}</div></div>
-      <div class="summary-card" data-tone="emerald"><div class="summary-label">Most Active CM</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topCM?topCM[0]:'—'}</div><div class="summary-sub">${topCM?topCM[1].toLocaleString()+' meeting'+(topCM[1]===1?'':'s'):'no CM data'}</div></div>
+      <div class="summary-card" data-tone="emerald"><div class="summary-label">Most Active CM</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topCM?escapeHtml(topCM[0]):'—'}</div><div class="summary-sub">${topCM?topCM[1].toLocaleString()+' meeting'+(topCM[1]===1?'':'s'):'no CM data'}</div></div>
     </div>
     <div class="card">
       <div class="card-header">
@@ -1755,12 +1731,12 @@ function renderMeetings(recs) {
         { label:'Date',         get:r=>r.date, cell:fmtDateCell },
         { label:'Time',         get:r=>r.time||'' },
         { label:'Location',     get:r=>r._canonicalSite||r.site||'' },
-        { label:'Meeting Name', get:r=>r.event_name||'', cell:r=>`<div style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${r.event_name||'—'}</div>` },
+        { label:'Meeting Name', get:r=>r.event_name||'', cell:r=>`<div style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${escapeHtml(r.event_name||'—')}</div>` },
         { label:'VIP Attendee', get:r=>r.vip||'', cell:r=>r.vip?`<span title="${escapeHtml(String(r.vip))}" style="font-weight:600;color:#92400E">${escapeHtml(String(r.vip).length>30?String(r.vip).slice(0,30)+'…':String(r.vip))}</span>`:'<span class="text-muted">—</span>' },
         { label:'# Attendees',  get:r=>r.attendees||0, cell:r=>r.attendees>0?`<div style="text-align:right;font-weight:600">${r.attendees.toLocaleString()}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
-        { label:'Room',         get:r=>r.room||'', cell:r=>`<div style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.room||'')}">${r.room||'—'}</div>` },
+        { label:'Room',         get:r=>r.room||'', cell:r=>`<div style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.room||'')}">${escapeHtml(r.room||'—')}</div>` },
         { label:'CM Captain',   get:r=>r.cm_captain||'' },
-        { label:'Status',       get:r=>r.status||'', cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${r.status}</span>`:'—' },
+        { label:'Status',       get:r=>r.status||'', cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${escapeHtml(r.status)}</span>`:'—' },
       ])}</div>
     </div>`;
 }
@@ -1781,7 +1757,7 @@ function renderEvents(recs) {
       <div class="summary-card" data-tone="rose"><div class="summary-label">Total Events</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">${confirmed.toLocaleString()} confirmed · ${pending.toLocaleString()} pending</div></div>
       <div class="summary-card" data-tone="emerald"><div class="summary-label">Total Budget</div><div class="summary-value">${totalBudget>0?fmtMoney(totalBudget):'—'}</div><div class="summary-sub">${eventsWithBudget>0?eventsWithBudget.toLocaleString()+' events with budget':'map a Budget column to populate'}</div></div>
       <div class="summary-card" data-tone="teal"><div class="summary-label">Total Attendees</div><div class="summary-value">${att.toLocaleString()}</div><div class="summary-sub">across events</div></div>
-      <div class="summary-card" data-tone="amber"><div class="summary-label">Most Active CM Lead</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topCM?topCM[0]:'—'}</div><div class="summary-sub">${topCM?topCM[1].toLocaleString()+' event'+(topCM[1]===1?'':'s'):'no CM data'}</div></div>
+      <div class="summary-card" data-tone="amber"><div class="summary-label">Most Active CM Lead</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topCM?escapeHtml(topCM[0]):'—'}</div><div class="summary-sub">${topCM?topCM[1].toLocaleString()+' event'+(topCM[1]===1?'':'s'):'no CM data'}</div></div>
     </div>
     <div class="card">
       <div class="card-header">
@@ -1792,13 +1768,13 @@ function renderEvents(recs) {
         { label:'Date',        get:r=>r.date, cell:fmtDateCell },
         { label:'Time',        get:r=>r.time||'' },
         { label:'Location',    get:r=>r._canonicalSite||r.site||'' },
-        { label:'Event Name',  get:r=>r.event_name||'', cell:r=>`<div style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${r.event_name||'—'}</div>` },
+        { label:'Event Name',  get:r=>r.event_name||'', cell:r=>`<div style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${escapeHtml(r.event_name||'—')}</div>` },
         { label:'CM Lead',     get:r=>r.cm_captain||'' },
         { label:'# Attendees', get:r=>r.attendees||0, cell:r=>r.attendees>0?`<div style="text-align:right;font-weight:600">${r.attendees.toLocaleString()}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
         { label:'Budget',      get:r=>r.budget||0, cell:r=>r.budget>0?`<div style="text-align:right;font-weight:600;color:#065F46">${fmtMoney(r.budget)}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
-        { label:'Room',        get:r=>r.room||'', cell:r=>`<div style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.room||'')}">${r.room||'—'}</div>` },
+        { label:'Room',        get:r=>r.room||'', cell:r=>`<div style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.room||'')}">${escapeHtml(r.room||'—')}</div>` },
         { label:'Event Type',  get:r=>r.event_type||'' },
-        { label:'Status',      get:r=>r.status||'', cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${r.status}</span>`:'—' },
+        { label:'Status',      get:r=>r.status||'', cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${escapeHtml(r.status)}</span>`:'—' },
       ])}</div>
     </div>`;
 }
@@ -1847,9 +1823,11 @@ function renderSortableTable(tabId, records, columns) {
     if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * st.dir;
     return String(va).localeCompare(String(vb)) * st.dir;
   });
-  const head = columns.map((c,i) => `<th class="sortable-th${st.col===i?' sorted':''}" onclick="sortTable('${tabId}',${i})">${c.label}${st.col===i?(st.dir>0?' ▲':' ▼'):''}</th>`).join('');
+  const head = columns.map((c,i) => `<th class="sortable-th${st.col===i?' sorted':''}" onclick="sortTable('${tabId}',${i})">${escapeHtml(c.label)}${st.col===i?(st.dir>0?' ▲':' ▼'):''}</th>`).join('');
   if (!sorted.length) return `<table class="upcoming-table"><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${columns.length}" class="empty-state">No records match filters</td></tr></tbody></table>`;
-  const body = sorted.slice(0,500).map(r => `<tr>${columns.map(c => `<td>${c.cell ? c.cell(r) : (c.get(r) || '—')}</td>`).join('')}</tr>`).join('');
+  // Default cell renderer escapes user-controlled values. Cells that need HTML
+  // (badges, formatted dates, money) supply their own pre-escaped `cell`.
+  const body = sorted.slice(0,500).map(r => `<tr>${columns.map(c => `<td>${c.cell ? c.cell(r) : escapeHtml(c.get(r) || '—')}</td>`).join('')}</tr>`).join('');
   const more = sorted.length > 500 ? `<tr><td colspan="${columns.length}" style="text-align:center;padding:14px;color:#94A3B8;font-size:12px">Showing first 500 of ${sorted.length.toLocaleString()} — use filters to narrow</td></tr>` : '';
   return `<table class="upcoming-table"><thead><tr>${head}</tr></thead><tbody>${body}${more}</tbody></table>`;
 }

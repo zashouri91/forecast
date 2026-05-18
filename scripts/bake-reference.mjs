@@ -113,10 +113,12 @@ function renderBlock(payload) {
   const idxBySiteName = {};
   const idxByBuildingRefId = {};
   const idxByLocationUpper = {};
+  const idxBySpacesLocationId = {};
   payload.sites.forEach((s, i) => {
     if (s.siteName) idxBySiteName[s.siteName.toLowerCase()] = i;
     if (s.buildingRefId) idxByBuildingRefId[s.buildingRefId] = i;
     if (s.location) idxByLocationUpper[s.location.toUpperCase()] = i;
+    if (s.spacesLocationId) idxBySpacesLocationId[String(s.spacesLocationId)] = i;
   });
 
   const lines = [
@@ -128,6 +130,7 @@ function renderBlock(payload) {
     `var BY_SITE_NAME = ${JSON.stringify(idxBySiteName, null, 2)};`,
     `var BY_BUILDING_REF = ${JSON.stringify(idxByBuildingRefId, null, 2)};`,
     `var BY_LOC_UPPER = ${JSON.stringify(idxByLocationUpper, null, 2)};`,
+    `var BY_SPACES_LOC = ${JSON.stringify(idxBySpacesLocationId, null, 2)};`,
     "function deref(m){var o={};for(var k in m){o[k]=SITES[m[k]];}return o;}",
     "window.CM_REFERENCE = {",
     `  version: ${JSON.stringify(payload.version)},`,
@@ -135,7 +138,8 @@ function renderBlock(payload) {
     "  sites: SITES,",
     "  bySiteName: deref(BY_SITE_NAME),",
     "  byBuildingRefId: deref(BY_BUILDING_REF),",
-    "  byLocationUpper: deref(BY_LOC_UPPER)",
+    "  byLocationUpper: deref(BY_LOC_UPPER),",
+    "  bySpacesLocationId: deref(BY_SPACES_LOC)",
     "};",
     "})();",
     "</script>",

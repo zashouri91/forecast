@@ -304,6 +304,17 @@ var BY_LOC_UPPER = {
   "RICHMOND, 2015 STAPLES MILL RD,": 7,
   "WOODLAND HILLS, 21215 BURBANK BLVD": 8
 };
+var BY_SPACES_LOC = {
+  "233": 1,
+  "700": 2,
+  "2015": 7,
+  "2025": 3,
+  "3099": 6,
+  "4361": 4,
+  "5800": 5,
+  "21215": 8,
+  "GA02": 0
+};
 function deref(m){var o={};for(var k in m){o[k]=SITES[m[k]];}return o;}
 window.CM_REFERENCE = {
   version: "2026-05-14",
@@ -311,7 +322,8 @@ window.CM_REFERENCE = {
   sites: SITES,
   bySiteName: deref(BY_SITE_NAME),
   byBuildingRefId: deref(BY_BUILDING_REF),
-  byLocationUpper: deref(BY_LOC_UPPER)
+  byLocationUpper: deref(BY_LOC_UPPER),
+  bySpacesLocationId: deref(BY_SPACES_LOC)
 };
 })();
 </script>
@@ -468,7 +480,7 @@ const filterState = { sites:new Set(['all']), regions:new Set(['all']), cms:new 
 let charts = {};
 let heatmapMode = 'count'; // 'count' | 'pct_primary_seats' | 'pct_expected_usage' | 'vs_tt_baseline'
 let activeTab = 'overview';
-const tableSort = { workspace:{col:0,dir:1}, meetings:{col:0,dir:1}, events:{col:0,dir:1} };
+const tableSort = { workspace:{col:0,dir:1}, meetings:{col:0,dir:1}, events:{col:0,dir:1}, wsDaily:{col:0,dir:1}, vipTravelers:{col:2,dir:1} };
 
 const STANDARD_FIELDS = [
   {key:'site',label:'Site / Location',required:true},
@@ -488,14 +500,14 @@ const STANDARD_FIELDS = [
 ];
 
 const FIELD_ALIASES = {
-  site:['site','location','pulse point location','building_name','location_name','location name','city'],
+  site:['site','location','pulse point location','building_name','location_name','location name','city','location_id','location id','spaces_location_id','spaces location id'],
   date:['date','start date','event date','start_time','arrival date','check-in date','meeting start date','helper date'],
   end_date:['end date','meeting end date','end_time','checkout time'],
-  event_name:['event name','meeting name','meeting or event name','amenity_name','display_name','amenity name'],
+  event_name:['event name','meeting name','meeting or event name','pref_display_name','preferred display name','pref display name','reserved by','reservation name','traveler name'],
   status:['status','mng approval status','valid'],
   attendees:['# guest','number of attendees','# attendees','num attendees','number of guests','reservation_duration','headcount','expected attendees','attendees'],
   vip:['vip','vips','vip attendee','vip attendees','vip name','vip names','executive','exec attendee','exec attending','principal','principals'],
-  budget:['budget','event budget','event spend','spend','total spend','estimated spend','estimated cost','cost','total cost','event cost','planned spend','approved budget'],
+  budget:['budget','event budget','event spend','total spend','estimated spend','estimated cost','total cost','event cost','planned spend','approved budget'],
   cm_captain:['cm captain','cm event lead','event team member','event lead','cm lead','cm owner'],
   time:['time','event time','meeting time','start time'],
   room:['room','requested meeting room','event location','amenity_name','amenity name','workspace','desk','seat'],
@@ -524,6 +536,7 @@ function resolveSiteValue(raw) {
   if (!v) return null;
   const vl = v.toLowerCase();
   const vu = v.toUpperCase();
+  if (ref.bySpacesLocationId && ref.bySpacesLocationId[v]) return { site: ref.bySpacesLocationId[v], score: 100, via: 'spacesLocationId' };
   if (ref.bySiteName[vl]) return { site: ref.bySiteName[vl], score: 100, via: 'siteName' };
   if (ref.byLocationUpper[vu]) return { site: ref.byLocationUpper[vu], score: 100, via: 'location' };
   if (ref.byBuildingRefId[v]) return { site: ref.byBuildingRefId[v], score: 100, via: 'buildingRefId' };
@@ -665,6 +678,13 @@ function parseCSV(name, text) {
   return {name,type:'csv',sheets:[name],selectedSheet:name,columns:headers,rows:[headers,...rows],mappings:autoMap(headers),recordType,rowCount:rows.length};
 }
 
+// Aliases in this set score higher than other exact matches for the same field,
+// so they win ties. Use sparingly — only when one alias is the canonical key
+// (e.g. LOCATION_ID is the PulsePoint join key, not BUILDING_NAME).
+const PREFERRED_ALIASES = {
+  site: new Set(['location_id','location id','spaces_location_id','spaces location id']),
+};
+
 function autoMap(columns) {
   const mappings={}, usedFields=new Set();
   const pairs=[];
@@ -673,7 +693,12 @@ function autoMap(columns) {
     const cl=col.toLowerCase().trim();
     Object.entries(FIELD_ALIASES).forEach(([field,aliases])=>{
       let score=0;
-      aliases.forEach(a=>{ if(cl===a)score=Math.max(score,10); else if(cl.includes(a))score=Math.max(score,5); else if(a.includes(cl)&&cl.length>3)score=Math.max(score,3); });
+      const preferred = PREFERRED_ALIASES[field];
+      aliases.forEach(a=>{
+        if(cl===a) score=Math.max(score, preferred && preferred.has(a) ? 20 : 10);
+        else if(cl.includes(a)) score=Math.max(score,5);
+        else if(a.includes(cl)&&cl.length>3) score=Math.max(score,3);
+      });
       if(score>0) pairs.push({col,field,score});
     });
   });
@@ -830,6 +855,8 @@ function fmtDate(val) {
 
 function applyMappings() {
   state.records=[];
+  state.filteredOutCount = 0;
+  state.filteredOutBySource = {};
   state.files.forEach(f=>{
     const {rows,columns,mappings,name,recordType}=f;
     const fi2idx={};
@@ -866,6 +893,13 @@ function applyMappings() {
           rec._capacity = target.capacity;
           rec._baseline = target.baseline;
         }
+      }
+      // Hard scope: keep only records that resolved to one of the master reference sites.
+      // Per spec, all tabs render against the 9 reference locations only.
+      if (REF() && !rec._canonicalSite) {
+        state.filteredOutCount++;
+        state.filteredOutBySource[name] = (state.filteredOutBySource[name]||0) + 1;
+        return;
       }
       state.records.push(rec);
     });
@@ -1123,6 +1157,27 @@ function nextNDayDigest(recs, n) {
   </table>` };
 }
 
+// Map AMENITY_TYPE / event_type values from Pulse Point Space Report onto the
+// three reservable capacity buckets in the master reference. Lowercased compare.
+const AMENITY_BUCKETS = {
+  workstation:    'workstations',
+  'staff vp office': 'privateOffices',
+  'vp office':    'privateOffices',
+  office:         'privateOffices',
+  'private office':'privateOffices',
+  capsule:        'capsules',
+};
+function amenityBucket(r) {
+  const t = (r.event_type || '').toLowerCase().trim();
+  if (!t) return null;
+  if (AMENITY_BUCKETS[t]) return AMENITY_BUCKETS[t];
+  if (t.includes('workstation')) return 'workstations';
+  if (t.includes('office'))      return 'privateOffices';
+  if (t.includes('capsule'))     return 'capsules';
+  return null;
+}
+const BUCKET_LABEL = { workstations:'Workstations', privateOffices:'Private Offices', capsules:'Capsules' };
+
 function fmtMoney(n) {
   if (!n) return '—';
   if (n >= 1000000) return `$${(n/1000000).toFixed(n>=10000000?0:1)}M`;
@@ -1134,29 +1189,34 @@ function hasVip(r) { return !!(r.vip && String(r.vip).trim() && !/^(no|n|false|0
 function renderWorkspace(recs) {
   const space = recs.filter(r => r._type === 'space');
   const trv = recs.filter(r => r._type === 'traveler');
-  const occ = buildOccupancyBySite(recs);
   const days = Math.max(1, daysInRange());
   const overallUtil = computeUtilization(recs);
-  const topSite = occ.length ? occ[0] : null;
+  const dailyGrid = buildDailyCapacityGrid(space);
+  const topRow = [...dailyGrid].sort((a,b) => b.totalReserved - a.totalReserved)[0];
 
   document.getElementById('tab-panel').innerHTML = `
     <div class="summary-grid">
       <div class="summary-card"><div class="summary-icon">🪑</div><div class="summary-label">Total Reservations</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">${space.length.toLocaleString()} space · ${trv.length.toLocaleString()} traveler</div></div>
       <div class="summary-card"><div class="summary-icon">📈</div><div class="summary-label">Avg Occupancy</div><div class="summary-value">${overallUtil.display}</div><div class="summary-sub">${overallUtil.sub}</div></div>
       <div class="summary-card"><div class="summary-icon">✈️</div><div class="summary-label">Traveler Arrivals</div><div class="summary-value">${trv.length.toLocaleString()}</div><div class="summary-sub">incoming in range</div></div>
-      <div class="summary-card"><div class="summary-icon">🏆</div><div class="summary-label">Busiest Site</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topSite?topSite.site:'—'}</div><div class="summary-sub">${topSite?topSite.total.toLocaleString()+' reservations':'no data'}</div></div>
+      <div class="summary-card"><div class="summary-icon">🏆</div><div class="summary-label">Busiest Day × Site</div><div class="summary-value" style="font-size:16px;line-height:1.2">${topRow?topRow.site:'—'}</div><div class="summary-sub">${topRow?topRow.date+' · '+topRow.totalReserved.toLocaleString()+' reservations':'no data'}</div></div>
     </div>
     <div class="card" style="margin-bottom:20px">
-      <div class="card-header"><div class="card-title">📊 Occupancy by Site${REF()?' (vs master reference)':''}</div><div class="text-muted">${days} day${days===1?'':'s'} in range</div></div>
-      <div style="overflow-x:auto">${renderOccupancyTable(occ)}</div>
+      <div class="card-header">
+        <div class="card-title">📊 Daily Capacity — Reservations by Site, by Day, by Type</div>
+        <div class="text-muted">${dailyGrid.length.toLocaleString()} rows · ${days} day${days===1?'':'s'} in range · click any column to sort</div>
+      </div>
+      <div style="max-height:640px;overflow-y:auto">${renderDailyCapacityTable(dailyGrid)}</div>
     </div>
+    ${renderVipTravelersCard(trv)}
     <div class="card">
       <div class="card-header"><div class="card-title">📋 Upcoming Reservations & Travelers</div><div class="text-muted">${recs.length.toLocaleString()} records · click any column to sort</div></div>
-      <div style="max-height:640px;overflow-y:auto">${renderSortableTable('workspace', recs, [
+      <div style="max-height:560px;overflow-y:auto">${renderSortableTable('workspace', recs, [
         { label:'Date',    get:r=>r.date,        cell:fmtDateCell },
         { label:'Site',    get:r=>r._canonicalSite||r.site||'' },
         { label:'State',   get:r=>r._state||'' },
         { label:'Type',    get:r=>r._type,       cell:r=>`<span class="badge ${RECORD_TYPES.find(x=>x.value===r._type)?.badge||'badge-meeting'}">${RECORD_TYPES.find(x=>x.value===r._type)?.label||r._type}</span>` },
+        { label:'Amenity', get:r=>r.event_type||'', cell:r=>r.event_type||'—' },
         { label:'Person / Detail', get:r=>r.event_name||r.room||'', cell:r=>`<div style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||r.room||'')}">${r.event_name||r.room||'—'}</div>` },
         { label:'Room',    get:r=>r.room||'' },
         { label:'CM',      get:r=>r.cm_captain||'' },
@@ -1165,64 +1225,77 @@ function renderWorkspace(recs) {
     </div>`;
 }
 
-function buildOccupancyBySite(recs) {
-  const map = {};
-  recs.forEach(r => {
-    const s = r._canonicalSite || r.site; if (!s) return;
-    const row = map[s] || (map[s] = { site: s, reservations: 0, travelers: 0, total: 0 });
-    if (r._type === 'traveler') row.travelers++; else row.reservations++;
-    row.total++;
-  });
-  // include reference sites even if they have no records (executives want to see all sites at a glance)
-  if (REF()) {
-    REF().sites.forEach(s => {
-      if (!map[s.siteName]) map[s.siteName] = { site: s.siteName, reservations: 0, travelers: 0, total: 0 };
+// Build a (site × day) grid of reservation counts split into the three reservable
+// buckets: workstations / private offices / capsules. Capacity denominators come
+// from the baked master reference (matched via Spaces Location ID / Site Name).
+// Excludes 'traveler' records — those are tracked separately on the table below.
+function buildDailyCapacityGrid(spaceRecs) {
+  const byKey = {}; // `${site}|${date}` → row
+  let unbucketed = 0;
+  spaceRecs.forEach(r => {
+    const site = r._canonicalSite || r.site;
+    if (!site || !r.date) return;
+    const bucket = amenityBucket(r);
+    const key = site + '|' + r.date;
+    const row = byKey[key] || (byKey[key] = {
+      site, date: r.date, state: r._state||'', regionalLeader: r._regionalLeader||'',
+      workstations:0, privateOffices:0, capsules:0, unbucketed:0, totalReserved:0,
+      capacity: r._capacity || null, _ref: !!r._canonicalSite,
     });
-  }
-  const days = Math.max(1, daysInRange());
-  const list = Object.values(map).map(row => {
-    const refSite = REF()?.bySiteName[row.site.toLowerCase()];
-    const seats = refSite?.capacity?.primarySeats || null;
-    const edu = refSite?.baseline?.expectedDailyUsage || null;
-    const avgDaily = row.reservations / days;
-    const utilPct = seats ? (avgDaily / seats) * 100 : null;
-    const vsEdu = edu ? (avgDaily / edu) * 100 : null;
-    return { ...row, state: refSite?.state || '', primarySeats: seats, edu, avgDaily, utilPct, vsEdu, regionalLeader: refSite?.regionalLeader || '' };
+    if (bucket) row[bucket]++; else { row.unbucketed++; unbucketed++; }
+    row.totalReserved++;
   });
-  list.sort((a, b) => b.total - a.total);
+  const list = Object.values(byKey);
+  // Attach capacity from reference even if records had no _capacity
+  list.forEach(row => {
+    if (row.capacity) return;
+    const ref = REF()?.bySiteName?.[row.site.toLowerCase()];
+    if (ref) { row.capacity = ref.capacity; row.state = row.state || ref.state; row.regionalLeader = row.regionalLeader || ref.regionalLeader; row._ref = true; }
+  });
+  // default sort: date ascending, then site
+  list.sort((a,b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.site.localeCompare(b.site));
   return list;
 }
 
-function renderOccupancyTable(rows) {
-  if (!rows.length) return '<div class="empty-state">No reservations in range and no reference data.</div>';
-  const head = `<thead><tr>
-    <th>Site</th><th>State</th><th>Regional Leader</th>
-    <th style="text-align:right">Space Reservations</th>
-    <th style="text-align:right">Travelers</th>
-    <th style="text-align:right">Total</th>
-    <th style="text-align:right">Primary Seats</th>
-    <th style="text-align:right">Avg Daily</th>
-    <th style="text-align:right">% of Seats</th>
-    <th style="text-align:right">vs Expected</th>
-  </tr></thead>`;
-  const utilBadge = (pct) => {
-    if (pct == null) return '<span class="text-muted">—</span>';
-    const cls = pct >= 90 ? 'status-canceled' : pct >= 60 ? 'status-pending' : 'status-confirmed';
+function renderVipTravelersCard(travelers) {
+  const vips = travelers.filter(hasVip);
+  return `<div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+      <div class="card-title">⭐ VIP Travelers</div>
+      <div class="text-muted">${vips.length.toLocaleString()} VIP arrival${vips.length===1?'':'s'} in range</div>
+    </div>
+    <div style="max-height:360px;overflow-y:auto">${
+      vips.length ? renderSortableTable('vipTravelers', vips, [
+        { label:'Name',     get:r=>r.event_name||r.vip||'', cell:r=>`<div style="font-weight:600">${escapeHtml(r.event_name||r.vip||'—')}</div>` },
+        { label:'Location', get:r=>r._canonicalSite||r.site||'', cell:r=>r._canonicalSite||r.site||'—' },
+        { label:'Date',     get:r=>r.date, cell:fmtDateCell },
+      ]) : '<div class="empty-state">No VIP travelers in range. Map the VIP column on a Travelers file to populate.</div>'
+    }</div>
+  </div>`;
+}
+
+function renderDailyCapacityTable(rows) {
+  if (!rows.length) return '<div class="empty-state">No space reservations in range. Map a column to <b>Site</b> (LOCATION_ID or site name) and <b>Event Type</b> (AMENITY_TYPE) to populate this grid.</div>';
+  const pctBadge = (used, cap) => {
+    if (!cap || cap <= 0) return '<span class="text-muted">—</span>';
+    const pct = (used / cap) * 100;
+    const cls = pct >= 90 ? 'status-canceled' : pct >= 60 ? 'status-pending' : pct > 0 ? 'status-confirmed' : 'status-other';
     return `<span class="status-badge ${cls}">${pct.toFixed(pct<10?1:0)}%</span>`;
   };
-  const body = rows.map(r => `<tr>
-    <td style="font-weight:600">${r.site}</td>
-    <td>${r.state || '—'}</td>
-    <td>${r.regionalLeader || '—'}</td>
-    <td style="text-align:right">${r.reservations.toLocaleString()}</td>
-    <td style="text-align:right">${r.travelers.toLocaleString()}</td>
-    <td style="text-align:right;font-weight:700">${r.total.toLocaleString()}</td>
-    <td style="text-align:right">${r.primarySeats ? r.primarySeats.toLocaleString() : '—'}</td>
-    <td style="text-align:right">${r.avgDaily ? r.avgDaily.toFixed(1) : '—'}</td>
-    <td style="text-align:right">${utilBadge(r.utilPct)}</td>
-    <td style="text-align:right">${r.vsEdu != null ? r.vsEdu.toFixed(0)+'%' : '—'}</td>
-  </tr>`).join('');
-  return `<table class="upcoming-table">${head}<tbody>${body}</tbody></table>`;
+  const cell = (used, cap) => {
+    if (!cap || cap <= 0) return `<div style="text-align:right">${used.toLocaleString()} <span class="text-muted">/ —</span></div>`;
+    return `<div style="text-align:right">${used.toLocaleString()} <span class="text-muted">/ ${cap.toLocaleString()}</span> ${pctBadge(used, cap)}</div>`;
+  };
+  const columns = [
+    { label:'Date',    get:r=>r.date, cell:r=>fmtDateCell(r) },
+    { label:'Site',    get:r=>r.site },
+    { label:'State',   get:r=>r.state||'', cell:r=>r.state||'—' },
+    { label:'Workstations',    get:r=>r.workstations,    cell:r=>cell(r.workstations,    r.capacity?.workstations) },
+    { label:'Private Offices', get:r=>r.privateOffices,  cell:r=>cell(r.privateOffices,  r.capacity?.privateOffices) },
+    { label:'Capsules',        get:r=>r.capsules,        cell:r=>cell(r.capsules,        r.capacity?.capsules) },
+    { label:'Total',           get:r=>r.totalReserved,   cell:r=>`<div style="text-align:right;font-weight:700">${r.totalReserved.toLocaleString()}</div>` },
+  ];
+  return renderSortableTable('wsDaily', rows, columns);
 }
 
 function renderMeetings(recs) {

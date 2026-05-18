@@ -487,6 +487,7 @@ const filterState = { sites:new Set(['all']), regions:new Set(['all']), cms:new 
 let charts = {};
 let heatmapMode = 'count'; // 'count' | 'pct_primary_seats' | 'pct_expected_usage' | 'vs_tt_baseline'
 let activeTab = 'overview';
+let modelControlsOpen = false;
 const tableSort = { workspace:{col:0,dir:1}, meetings:{col:0,dir:1}, events:{col:0,dir:1}, wsDaily:{col:0,dir:1}, vipTravelers:{col:2,dir:1}, riskRadar:{col:1,dir:1} };
 
 const STANDARD_FIELDS = [
@@ -1531,11 +1532,11 @@ function renderOverview(recs) {
       <div class="card-header">
         <div class="card-title">Model Controls</div>
         <div style="display:flex;gap:10px;align-items:center">
-          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('model-controls-body').classList.toggle('hidden')">Toggle</button>
+          <button class="btn btn-sm btn-secondary" onclick="modelControlsOpen=!modelControlsOpen;document.getElementById('model-controls-body').classList.toggle('hidden',!modelControlsOpen)">Toggle</button>
           <button class="btn btn-sm btn-secondary" onclick="resetModel()">Reset</button>
         </div>
       </div>
-      <div id="model-controls-body" class="hidden">
+      <div id="model-controls-body" ${modelControlsOpen ? '' : 'class="hidden"'}>
         <div class="card-body" style="padding:16px">
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px">
             <div>

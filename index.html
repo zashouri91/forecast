@@ -1311,6 +1311,12 @@ function applyTabFilterVisibility() {
     const el = document.getElementById(id);
     if (el) el.style.display = cfg[k] ? '' : 'none';
   });
+  // Events tab: hide the sidebar and go full-width so the table has maximum room.
+  const layout = document.querySelector('.dashboard-layout');
+  const sidebar = document.querySelector('.filters-panel');
+  const isEvents = activeTab === 'events';
+  if (layout)  layout.style.gridTemplateColumns = isEvents ? '1fr' : '';
+  if (sidebar) sidebar.style.display            = isEvents ? 'none' : '';
 }
 
 function setTab(id) {
@@ -1988,6 +1994,16 @@ function renderEvents(recs) {
   const topCMs = Object.entries(cmCounts).sort((a,b)=>b[1]-a[1]);
   const topCM = topCMs[0];
 
+  // Compact location + status filter strip (replaces the hidden sidebar for this tab)
+  const allSites = getAllSiteNames();
+  const siteChips = allSites.map(s =>
+    `<span class="chip${filterState.sites.has(s)?' active':''}" onclick="toggleChip(this,'site','${jsString(s)}')">${escapeHtml(s)}</span>`
+  ).join('');
+  const allStatuses = [...new Set(state.records.filter(r=>r._type==='event').map(r=>r.status).filter(Boolean))].sort();
+  const statusChips = allStatuses.slice(0,12).map(s =>
+    `<span class="chip${filterState.statuses.has(s)?' active':''}" onclick="toggleChip(this,'status','${jsString(s)}')">${escapeHtml(s)}</span>`
+  ).join('');
+
   document.getElementById('tab-panel').innerHTML = `
     <div class="summary-grid">
       <div class="summary-card" data-tone="rose"><div class="summary-label">Total Events</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">${confirmed.toLocaleString()} confirmed · ${pending.toLocaleString()} pending</div></div>
@@ -1995,20 +2011,35 @@ function renderEvents(recs) {
       <div class="summary-card" data-tone="teal"><div class="summary-label">Total Attendees</div><div class="summary-value">${att.toLocaleString()}</div><div class="summary-sub">across events</div></div>
       <div class="summary-card" data-tone="amber"><div class="summary-label">Most Active CM Lead</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topCM?escapeHtml(topCM[0]):'—'}</div><div class="summary-sub">${topCM?topCM[1].toLocaleString()+' event'+(topCM[1]===1?'':'s'):'no CM data'}</div></div>
     </div>
+
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">Location</span>
+        <span class="chip active" onclick="toggleChip(this,'site','all')">All</span>
+        ${siteChips}
+      </div>
+      ${allStatuses.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-left:1px solid #F1F5F9;padding-left:12px">
+        <span style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">Status</span>
+        <span class="chip active" onclick="toggleChip(this,'status','all')">All</span>
+        ${statusChips}
+      </div>` : ''}
+      <button class="btn btn-sm btn-secondary" style="margin-left:auto" onclick="clearFilters()">Clear</button>
+    </div>
+
     <div class="card">
       <div class="card-header">
         <div class="card-title">Upcoming Events</div>
         <div class="text-muted">${recs.length.toLocaleString()} records · click any column to sort</div>
       </div>
-      <div style="max-height:720px;overflow-y:auto">${renderSortableTable('events', recs, [
-        { label:'Date',           get:r=>r.date,            cell:fmtDateCell },
+      <div style="overflow-x:auto;max-height:800px;overflow-y:auto">${renderSortableTable('events', recs, [
+        { label:'Date',           get:r=>r.date,           cell:fmtDateCell },
         { label:'Time',           get:r=>r.time||'' },
         { label:'Location',       get:r=>r._canonicalSite||r.site||'' },
-        { label:'Event Name',     get:r=>r.event_name||'',  cell:r=>`<div style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${escapeHtml(r.event_name||'—')}</div>` },
-        { label:'The Why',        get:r=>r.why||'',         cell:r=>r.why?`<div style="max-width:260px;white-space:normal;line-height:1.45;font-size:12px;color:#374151">${escapeHtml(r.why)}</div>`:'<span class="text-muted">—</span>' },
-        { label:'Est. Budget',    get:r=>r.budget||0,       cell:r=>r.budget>0?`<div style="text-align:right;font-weight:600;color:#065F46">${fmtMoney(r.budget)}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
-        { label:'Event Location', get:r=>r.room||'',        cell:r=>`<div style="max-width:200px;white-space:normal;line-height:1.4;font-size:12px">${escapeHtml(r.room||'—')}</div>` },
-        { label:'Event Type',     get:r=>r.event_type||'' },
+        { label:'Event Name',     get:r=>r.event_name||'', cell:r=>`<div style="min-width:160px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${escapeHtml(r.event_name||'—')}</div>` },
+        { label:'The Why',        get:r=>r.why||'',        cell:r=>r.why?`<div title="${escapeHtml(r.why)}" style="min-width:200px;max-width:300px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45;font-size:12px;color:#374151">${escapeHtml(r.why)}</div>`:'<span class="text-muted">—</span>' },
+        { label:'Est. Budget',    get:r=>r.budget||0,      cell:r=>r.budget>0?`<div style="text-align:right;font-weight:600;color:#065F46;white-space:nowrap">${fmtMoney(r.budget)}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
+        { label:'Event Location', get:r=>r.room||'',       cell:r=>`<div style="min-width:120px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.room||'')}">${escapeHtml(r.room||'—')}</div>` },
+        { label:'Event Type',     get:r=>r.event_type||'', cell:r=>r.event_type?`<div style="white-space:nowrap">${escapeHtml(r.event_type)}</div>`:'<span class="text-muted">—</span>' },
       ])}</div>
     </div>`;
 }

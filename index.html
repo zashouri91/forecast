@@ -502,66 +502,7 @@ function renderDashboard(){
       <div>
         <div class="side-panel">
 
-          <!-- CAPACITY MODEL -->
-          <div class="panel-section">
-            <div class="panel-title">⚙️ Capacity Model</div>
-            <div style="font-size:11px;color:#64748B;margin-bottom:14px">Adjust what makes a CM day "full". Changes update the dashboard instantly.</div>
-
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-label">📍 Baseline daily load</span><span class="slider-val" id="sv-baseline">${cap.baseline}%</span></div>
-              <input type="range" min="0" max="60" value="${cap.baseline}" oninput="setCap('baseline',+this.value,'sv-baseline','%');refreshDash()">
-              <div class="slider-desc">% of day used just by existing — site walks, supply runs, tours, ad-hoc requests</div>
-            </div>
-
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-label">📊 Max effort points = 100%</span><span class="slider-val" id="sv-maxPts">${cap.maxPts}pts</span></div>
-              <input type="range" min="20" max="300" step="5" value="${cap.maxPts}" oninput="setCap('maxPts',+this.value,'sv-maxPts','pts');refreshDash()">
-              <div class="slider-desc">Total effort points a CM can handle in a day (beyond baseline)</div>
-            </div>
-
-            <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 10px">Per-Record Weights</div>
-
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-label">🤝 Per meeting (base)</span><span class="slider-val" id="sv-perMeeting">${cap.perMeeting}pts</span></div>
-              <input type="range" min="1" max="40" value="${cap.perMeeting}" oninput="setCap('perMeeting',+this.value,'sv-perMeeting','pts');refreshDash()">
-            </div>
-
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-label">👥 Per attendee</span><span class="slider-val" id="sv-perAttendee">${cap.perAttendee}pts</span></div>
-              <input type="range" min="0" max="2" step="0.05" value="${cap.perAttendee}" oninput="setCap('perAttendee',parseFloat(this.value).toFixed(2),'sv-perAttendee','pts');refreshDash()">
-              <div class="slider-desc">Each additional attendee adds this much effort</div>
-            </div>
-
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-label">🍽️ Catering required</span><span class="slider-val" id="sv-cateringBonus">+${cap.cateringBonus}pts</span></div>
-              <input type="range" min="0" max="40" value="${cap.cateringBonus}" oninput="setCap('cateringBonus',+this.value,'sv-cateringBonus','+','pts');refreshDash()">
-            </div>
-
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-label">🏅 External/VIP guests</span><span class="slider-val" id="sv-externalBonus">+${cap.externalBonus}pts</span></div>
-              <input type="range" min="0" max="40" value="${cap.externalBonus}" oninput="setCap('externalBonus',+this.value,'sv-externalBonus','+','pts');refreshDash()">
-            </div>
-
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-label">📦 Items shipped to site</span><span class="slider-val" id="sv-shippingBonus">+${cap.shippingBonus}pts</span></div>
-              <input type="range" min="0" max="30" value="${cap.shippingBonus}" oninput="setCap('shippingBonus',+this.value,'sv-shippingBonus','+','pts');refreshDash()">
-            </div>
-
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-label">🎯 Event multiplier</span><span class="slider-val" id="sv-eventMult">${cap.eventMult}×</span></div>
-              <input type="range" min="1" max="6" step="0.5" value="${cap.eventMult}" oninput="setCap('eventMult',parseFloat(this.value).toFixed(1),'sv-eventMult','×');refreshDash()">
-              <div class="slider-desc">Events count as this many times more work than a meeting</div>
-            </div>
-
-            <div class="slider-row">
-              <div class="slider-header"><span class="slider-label">✈️ Per traveler</span><span class="slider-val" id="sv-travelerPts">${cap.travelerPts}pts</span></div>
-              <input type="range" min="0" max="20" value="${cap.travelerPts}" oninput="setCap('travelerPts',+this.value,'sv-travelerPts','pts');refreshDash()">
-            </div>
-
-            <button class="btn btn-sm btn-secondary" style="width:100%;justify-content:center;margin-top:4px" onclick="resetCap()">↺ Reset to defaults</button>
-          </div>
-
-          <!-- FILTERS -->
+          <!-- FILTERS (always visible at top) -->
           <div class="panel-section">
             <div class="panel-title">🔽 Filters</div>
             <div style="margin-bottom:12px">
@@ -585,14 +526,76 @@ function renderDashboard(){
                 ${types.map(t=>`<span class="chip" onclick="toggleChip(this,'rtype','${t}')">${t}</span>`).join('')}
               </div>
             </div>
-            <div>
+            <div style="margin-bottom:12px">
               <div class="filter-label">Status</div>
               <div class="filter-chips" id="fc-statuses">
                 <span class="chip active" onclick="toggleChip(this,'status','all')">All</span>
                 ${statuses.slice(0,12).map(s=>`<span class="chip" onclick="toggleChip(this,'status','${esc(s)}')">${s}</span>`).join('')}
               </div>
             </div>
-            <button class="btn btn-sm btn-secondary" style="width:100%;justify-content:center;margin-top:12px" onclick="clearFilters()">✕ Clear Filters</button>
+            <button class="btn btn-sm btn-secondary" style="width:100%;justify-content:center" onclick="clearFilters()">✕ Clear Filters</button>
+          </div>
+
+          <!-- CAPACITY MODEL (collapsible, below filters) -->
+          <div class="panel-section">
+            <details>
+              <summary>⚙️ Capacity Model <span style="font-size:10px;color:#94A3B8;font-weight:400">· click to tune</span></summary>
+              <div style="margin-top:12px">
+                <div style="font-size:11px;color:#64748B;margin-bottom:14px">Adjust what makes a CM day "full". Changes update instantly.</div>
+
+                <div class="slider-row">
+                  <div class="slider-header"><span class="slider-label">📍 Baseline daily load</span><span class="slider-val" id="sv-baseline">${cap.baseline}%</span></div>
+                  <input type="range" min="0" max="60" value="${cap.baseline}" oninput="setCap('baseline',+this.value,'sv-baseline','%');refreshDash()">
+                  <div class="slider-desc">% used just by existing responsibilities — site walks, tours, supply runs, ad-hoc needs</div>
+                </div>
+
+                <div class="slider-row">
+                  <div class="slider-header"><span class="slider-label">📊 Points = 100% capacity</span><span class="slider-val" id="sv-maxPts">${cap.maxPts}pts</span></div>
+                  <input type="range" min="20" max="300" step="5" value="${cap.maxPts}" oninput="setCap('maxPts',+this.value,'sv-maxPts','pts');refreshDash()">
+                  <div class="slider-desc">Total effort points a CM can handle per day (beyond baseline)</div>
+                </div>
+
+                <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 8px">Per-Record Weights</div>
+
+                <div class="slider-row">
+                  <div class="slider-header"><span class="slider-label">🤝 Per meeting</span><span class="slider-val" id="sv-perMeeting">${cap.perMeeting}pts</span></div>
+                  <input type="range" min="1" max="40" value="${cap.perMeeting}" oninput="setCap('perMeeting',+this.value,'sv-perMeeting','pts');refreshDash()">
+                </div>
+
+                <div class="slider-row">
+                  <div class="slider-header"><span class="slider-label">👥 Per attendee</span><span class="slider-val" id="sv-perAttendee">${cap.perAttendee}pts</span></div>
+                  <input type="range" min="0" max="2" step="0.05" value="${cap.perAttendee}" oninput="setCap('perAttendee',parseFloat(this.value).toFixed(2),'sv-perAttendee','pts');refreshDash()">
+                </div>
+
+                <div class="slider-row">
+                  <div class="slider-header"><span class="slider-label">🍽️ Catering required</span><span class="slider-val" id="sv-cateringBonus">+${cap.cateringBonus}pts</span></div>
+                  <input type="range" min="0" max="40" value="${cap.cateringBonus}" oninput="setCap('cateringBonus',+this.value,'sv-cateringBonus','+','pts');refreshDash()">
+                </div>
+
+                <div class="slider-row">
+                  <div class="slider-header"><span class="slider-label">🏅 External/VIP guests</span><span class="slider-val" id="sv-externalBonus">+${cap.externalBonus}pts</span></div>
+                  <input type="range" min="0" max="40" value="${cap.externalBonus}" oninput="setCap('externalBonus',+this.value,'sv-externalBonus','+','pts');refreshDash()">
+                </div>
+
+                <div class="slider-row">
+                  <div class="slider-header"><span class="slider-label">📦 Items shipped to site</span><span class="slider-val" id="sv-shippingBonus">+${cap.shippingBonus}pts</span></div>
+                  <input type="range" min="0" max="30" value="${cap.shippingBonus}" oninput="setCap('shippingBonus',+this.value,'sv-shippingBonus','+','pts');refreshDash()">
+                </div>
+
+                <div class="slider-row">
+                  <div class="slider-header"><span class="slider-label">🎯 Event multiplier</span><span class="slider-val" id="sv-eventMult">${cap.eventMult}×</span></div>
+                  <input type="range" min="1" max="6" step="0.5" value="${cap.eventMult}" oninput="setCap('eventMult',parseFloat(this.value).toFixed(1),'sv-eventMult','×');refreshDash()">
+                  <div class="slider-desc">Events count as this many times more work than a standard meeting</div>
+                </div>
+
+                <div class="slider-row">
+                  <div class="slider-header"><span class="slider-label">✈️ Per traveler</span><span class="slider-val" id="sv-travelerPts">${cap.travelerPts}pts</span></div>
+                  <input type="range" min="0" max="20" value="${cap.travelerPts}" oninput="setCap('travelerPts',+this.value,'sv-travelerPts','pts');refreshDash()">
+                </div>
+
+                <button class="btn btn-sm btn-secondary" style="width:100%;justify-content:center;margin-top:4px" onclick="resetCap()">↺ Reset to defaults</button>
+              </div>
+            </details>
           </div>
 
         </div>

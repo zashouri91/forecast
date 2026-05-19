@@ -509,12 +509,16 @@ const STANDARD_FIELDS = [
 
 const FIELD_ALIASES = {
   site:['site','location','pulse point location','building_name','location_name','location name','city','location_id','location id','spaces_location_id','spaces location id'],
-  date:['date','start date','event date','start_time','arrival date','check-in date','meeting start date','helper date'],
+  // 'helper date' removed — it stole priority from 'Meeting Start Date' in Atlanta file
+  date:['date','start date','event date','start_time','arrival date','check-in date','meeting start date'],
   end_date:['end date','meeting end date','end_time','checkout time'],
   event_name:['event name','meeting name','meeting or event name','pref_display_name','preferred display name','pref display name','reserved by','reservation name','traveler name','traveler first name','first name','attendee name','guest name'],
-  status:['status','mng approval status','valid'],
-  attendees:['# guest','number of attendees','# attendees','num attendees','number of guests','reservation_duration','headcount','expected attendees','attendees'],
-  vip:['vip','vips','vip attendee','vip attendees','vip name','vip names','executive','exec attendee','exec attending','principal','principals'],
+  // 'valid' removed — it stole priority from the actual 'Status' column in meeting reports (Valid is a boolean flag, not a status)
+  status:['status','mng approval status'],
+  // 'reservation_duration' removed — it is a time duration, not a headcount; caused false positives in Space Report and Planning Grid
+  attendees:['# guest','number of attendees','# attendees','num attendees','number of guests','headcount','expected attendees','attendees'],
+  // added 'vip/meeting host' and 'vp/meeting host' for Mason and similar files
+  vip:['vip','vips','vip attendee','vip attendees','vip name','vip names','executive','exec attendee','exec attending','principal','principals','vip/meeting host','vp/meeting host'],
   budget:['budget','event budget','event spend','total spend','estimated spend','estimated cost','total cost','event cost','planned spend','approved budget'],
   cm_captain:['cm captain','cm event lead','event team member','event lead','cm lead','cm owner'],
   time:['time','event time','meeting time','start time'],
@@ -691,9 +695,12 @@ function parseCSV(name, text) {
 // (e.g. LOCATION_ID is the PulsePoint join key, not BUILDING_NAME).
 const PREFERRED_ALIASES = {
   site: new Set(['location_id','location id','spaces_location_id','spaces location id']),
-  // Travelers files have both "Check-In Date" (usually empty for incoming travelers)
-  // and "Arrival Date" (the real arrival). Bias Arrival Date so it wins the tie.
+  // Travelers files have both "Check-In Date" and "Arrival Date"; Arrival Date is the real one.
   date: new Set(['arrival date']),
+  // 'Catering Info' is a text/detail column; 'Food Delivery' is often a boolean — prefer the richer column.
+  catering: new Set(['catering info']),
+  // 'CM Captain' and 'CM Event Lead' are explicit CM role columns; beat generic 'Event Team Member' / 'Event Lead'.
+  cm_captain: new Set(['cm captain', 'cm event lead']),
 };
 
 function autoMap(columns) {
@@ -933,6 +940,16 @@ function applyMappings() {
         state.filteredOutCount++;
         state.filteredOutBySource[name] = (state.filteredOutBySource[name]||0) + 1;
         return;
+      }
+      // For space reservations, only keep confirmed/reserved statuses.
+      // Cancelled, pending, waitlisted, etc. should not count toward load or table totals.
+      if (rec._type === 'space' && rec.status) {
+        const sl = rec.status.toLowerCase();
+        if (!sl.includes('confirm') && !sl.includes('reserv')) {
+          state.filteredOutCount++;
+          state.filteredOutBySource[name] = (state.filteredOutBySource[name]||0) + 1;
+          return;
+        }
       }
       state.records.push(rec);
     });
@@ -1189,6 +1206,31 @@ function todayStr() {
 }
 function addDays(s,n) { const d=new Date(s+'T12:00:00'); d.setDate(d.getDate()+n); return fmtDate(d.toISOString()); }
 
+function setDatePreset(preset) {
+  const todayS = todayStr();
+  const now = new Date(todayS + 'T12:00:00');
+  let from = todayS, to = todayS;
+  if (preset === 'this_week') {
+    from = todayS; to = addDays(todayS, 6);
+  } else if (preset === 'next_week') {
+    from = addDays(todayS, 7); to = addDays(todayS, 13);
+  } else if (preset === 'this_month') {
+    from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    to = fmtDate(new Date(now.getFullYear(), now.getMonth()+1, 0));
+  } else if (preset === 'next_month') {
+    const nm = new Date(now.getFullYear(), now.getMonth()+1, 1);
+    to = fmtDate(new Date(now.getFullYear(), now.getMonth()+2, 0));
+    from = `${nm.getFullYear()}-${String(nm.getMonth()+1).padStart(2,'0')}-01`;
+  } else if (preset === 'next_30') {
+    from = todayS; to = addDays(todayS, 29);
+  } else if (preset === 'next_90') {
+    from = todayS; to = addDays(todayS, 89);
+  }
+  document.getElementById('f-from').value = from;
+  document.getElementById('f-to').value = to;
+  refreshDash();
+}
+
 function renderDashboard() {
   Object.values(charts).forEach(c=>c&&c.destroy&&c.destroy()); charts={};
   const today=todayStr();
@@ -1202,11 +1244,22 @@ function renderDashboard() {
 
   document.getElementById('dashboard-content').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;flex-wrap:wrap;gap:14px">
-      <div><div class="section-title">Community Manager Forecast</div><div class="section-sub" id="dash-subtitle">${state.records.length.toLocaleString()} record${state.records.length===1?'':'s'} across ${getAllSiteNames().length} location${getAllSiteNames().length===1?'':'s'}</div></div>
-      <div style="display:flex;gap:10px;align-items:flex-end">
-        <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">From</label><input type="date" id="f-from" value="${today}" onchange="refreshDash()" style="width:130px"></div>
-        <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">To</label><input type="date" id="f-to" value="${to90}" onchange="refreshDash()" style="width:130px"></div>
-        <button class="btn btn-sm btn-secondary" onclick="exportCSV()">Export CSV</button>
+      <div>
+        <div class="section-title">Community Manager Forecast</div>
+        <div class="section-sub" id="dash-subtitle">${state.records.length.toLocaleString()} record${state.records.length===1?'':'s'} across ${getAllSiteNames().length} location${getAllSiteNames().length===1?'':'s'}${state.filteredOutCount > 0 ? ` &nbsp;·&nbsp; <span style="color:#EF4444;font-weight:600">${state.filteredOutCount} dropped</span> <span style="color:#94A3B8">(unresolved site or excluded status — check column mapping)</span>` : ''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+          ${['this_week','next_week','this_month','next_month','next_30','next_90'].map(p=>{
+            const label={'this_week':'This Week','next_week':'Next Week','this_month':'This Month','next_month':'Next Month','next_30':'Next 30 Days','next_90':'Next 90 Days'}[p];
+            return `<button style="font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='#F1F5F9'" onmouseout="this.style.background='#F8FAFC'" onclick="setDatePreset('${p}')">${label}</button>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">From</label><input type="date" id="f-from" value="${today}" onchange="refreshDash()" style="width:130px"></div>
+          <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">To</label><input type="date" id="f-to" value="${to90}" onchange="refreshDash()" style="width:130px"></div>
+          <button class="btn btn-sm btn-secondary" onclick="exportCSV()">Export CSV</button>
+        </div>
       </div>
     </div>
     <div class="dash-tabs" role="tablist" aria-label="Dashboard sections">
@@ -1397,6 +1450,14 @@ function renderWeekAheadGrid(recs, stats) {
 
   const hasData = recs.length > 0;
 
+  // Per-site record count within the 7-day window — used to distinguish "no data" from "no activity"
+  const daysSet = new Set(days);
+  const siteWeekCounts = {};
+  recs.forEach(r => {
+    const s = r._canonicalSite || r.site;
+    if (s && r.date && daysSet.has(r.date)) siteWeekCounts[s] = (siteWeekCounts[s] || 0) + 1;
+  });
+
   const dayMeta = days.map(d => {
     const dt = new Date(d + 'T12:00:00');
     return {
@@ -1422,6 +1483,19 @@ function renderWeekAheadGrid(recs, stats) {
     weekCounts[worst]++;
   });
 
+  // Peak site: highest-util location-day this week
+  let peakSite = null;
+  let peakUtil = 0;
+  locations.forEach(loc => {
+    days.forEach((d, di) => {
+      const row = stats[loc]?.[d];
+      if (row && row.util > peakUtil) {
+        peakUtil = row.util;
+        peakSite = { loc, util: row.util, status: row.flags?.status || riskStatus(row.util, false), weekday: dayMeta[di].weekday, mmdd: dayMeta[di].mmdd };
+      }
+    });
+  });
+
   const C = {
     high:     { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B', label: 'High' },
     elevated: { bg: '#FFFBEB', border: '#FDE68A', text: '#92400E', label: 'Busy' },
@@ -1442,7 +1516,16 @@ function renderWeekAheadGrid(recs, stats) {
 
   locations.forEach((loc, idx) => {
     html += `<tr style="background:${idx%2===0?'#FAFAFA':'#FFFFFF'}">`;
-    html += `<td style="padding:10px 14px;font-size:13px;font-weight:600;color:#1E293B;white-space:nowrap;border-bottom:1px solid #F1F5F9">${escapeHtml(loc)}</td>`;
+    const weekRecs = siteWeekCounts[loc] || 0;
+    const weekRecLabel = hasData
+      ? (weekRecs > 0
+          ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px">${weekRecs} record${weekRecs===1?'':'s'}</div>`
+          : `<div style="font-size:10px;color:#FCA5A5;margin-top:1px">no data this week</div>`)
+      : '';
+    html += `<td style="padding:10px 14px;border-bottom:1px solid #F1F5F9">
+      <div style="font-size:13px;font-weight:600;color:#1E293B;white-space:nowrap">${escapeHtml(loc)}</div>
+      ${weekRecLabel}
+    </td>`;
     dayMeta.forEach(h => {
       const row = stats[loc]?.[h.d];
       const tdStyle = `padding:6px 4px;border-bottom:1px solid #F1F5F9;text-align:center;${h.isToday ? 'background:#F5F3FF;' : ''}`;
@@ -1458,15 +1541,25 @@ function renderWeekAheadGrid(recs, stats) {
       const c = C[status] || C.normal;
       const utilPct = Math.round(row.util * 100);
       const cap = dailyCapacity(loc);
+      const cmCount = rawCMCountForSite(loc);
+      const vsTypical = row.util / MODEL.thrElevated;
       const parts = [];
       if (row.events)    parts.push(`${row.events} event${row.events>1?'s':''}`);
       if (row.meetings)  parts.push(`${row.meetings} mtg`);
       if (row.travelers) parts.push(`${row.travelers} traveler${row.travelers>1?'s':''}`);
-      const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% utilized · ${parts.join(' · ')}${cap ? ` · Capacity ${cap.toFixed(1)}` : ''}`);
+      const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% utilized · ${parts.join(' · ')}${cap ? ` · Capacity ${cap.toFixed(1)}` : ''} · ${vsTypical.toFixed(1)}× typical`);
+      const driverParts = [];
+      if (row.events)    driverParts.push(`${row.events} evt`);
+      if (row.meetings)  driverParts.push(`${row.meetings} mtg`);
+      if (row.travelers) driverParts.push(`${row.travelers} trvl`);
+      const driverStr = driverParts.slice(0, 2).join(' · ') + (cmCount ? ` · ${cmCount}CM` : '');
+      const vsStr = status !== 'normal' ? `${vsTypical.toFixed(1)}× typical` : null;
       html += `<td style="${tdStyle}" title="${tip}">
-        <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;background:${c.bg};border:1px solid ${c.border};border-radius:6px;padding:5px 6px;min-width:58px">
-          <span style="font-size:13px;font-weight:700;color:${c.text};line-height:1">${utilPct}%</span>
-          <span style="font-size:9px;font-weight:600;color:${c.text};opacity:.8;line-height:1;text-transform:uppercase;letter-spacing:.04em">${c.label}</span>
+        <div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;background:${c.bg};border:1px solid ${c.border};border-radius:6px;padding:6px 7px;min-width:74px">
+          <span style="font-size:14px;font-weight:700;color:${c.text};line-height:1">${utilPct}%</span>
+          <span style="font-size:9px;font-weight:700;color:${c.text};opacity:.85;line-height:1;text-transform:uppercase;letter-spacing:.05em">${c.label}</span>
+          ${driverStr ? `<span style="font-size:9px;color:${c.text};opacity:.7;line-height:1;margin-top:1px;white-space:nowrap">${escapeHtml(driverStr)}</span>` : ''}
+          ${vsStr ? `<span style="font-size:9px;color:${c.text};opacity:.65;line-height:1;font-style:italic">${escapeHtml(vsStr)}</span>` : ''}
         </div>
       </td>`;
     });
@@ -1476,13 +1569,13 @@ function renderWeekAheadGrid(recs, stats) {
   html += `</tbody></table></div>
   <div style="display:flex;gap:16px;margin-top:12px;align-items:center;flex-wrap:wrap">
     <span style="font-size:11px;color:#64748B;font-weight:600">Key:</span>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:2px"></div><span style="font-size:11px;color:#64748B">OK &lt;${Math.round(MODEL.thrElevated*100)}%</span></div>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:2px"></div><span style="font-size:11px;color:#64748B">Busy ${Math.round(MODEL.thrElevated*100)}–${Math.round(MODEL.thrHigh*100)}%</span></div>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:2px"></div><span style="font-size:11px;color:#64748B">High &gt;${Math.round(MODEL.thrHigh*100)}%</span></div>
-    <span style="font-size:11px;color:#94A3B8;margin-left:4px">— = no activity · Utilization = Load ÷ (CMs × ${Math.round(MODEL.ptoFactor*100)}% avail × ${MODEL.meetingEqPerDay} tasks/day)</span>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:2px"></div><span style="font-size:11px;color:#64748B">Green — room to spare</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:2px"></div><span style="font-size:11px;color:#64748B">Amber — team is stretched</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:2px"></div><span style="font-size:11px;color:#64748B">Red — consider support</span></div>
+    <span style="font-size:11px;color:#94A3B8;margin-left:4px">— = no activity · cells show: load% · top drivers · CMs · ×typical</span>
   </div>`;
 
-  return { html, weekCounts };
+  return { html, weekCounts, peakSite };
 }
 
 function renderOverview(recs) {
@@ -1491,38 +1584,51 @@ function renderOverview(recs) {
   const rsv = recs.filter(r => r._type === 'space' || r._type === 'traveler').length;
 
   const stats = buildSiteDayStats(recs);
-  const { html: weekGridHtml, weekCounts } = renderWeekAheadGrid(recs, stats);
+  const { html: weekGridHtml, weekCounts, peakSite } = renderWeekAheadGrid(recs, stats);
 
   document.getElementById('tab-panel').innerHTML = `
     <div class="summary-grid">
-      <div class="summary-card" data-tone="indigo"><div class="summary-label">Meetings</div><div class="summary-value">${mtg.toLocaleString()}</div><div class="summary-sub">in date range</div></div>
-      <div class="summary-card" data-tone="rose"><div class="summary-label">Events</div><div class="summary-value">${evt.toLocaleString()}</div><div class="summary-sub">planned</div></div>
-      <div class="summary-card" data-tone="teal"><div class="summary-label">Reservations</div><div class="summary-value">${rsv.toLocaleString()}</div><div class="summary-sub">workspaces and travelers</div></div>
+      <div class="summary-card" data-tone="rose">
+        <div class="summary-label">Needs Support</div>
+        <div class="summary-value">${weekCounts.high}</div>
+        <div class="summary-sub">location${weekCounts.high !== 1 ? 's' : ''} at max capacity this week</div>
+      </div>
       <div class="summary-card" data-tone="amber">
-        <div class="summary-label">This Week</div>
-        <div class="summary-value" style="font-size:16px;line-height:1.4">
-          <span style="color:#E11D48;font-weight:800">${weekCounts.high}</span><span style="color:#94A3B8;font-size:13px;font-weight:400"> high &nbsp;</span><span style="color:#F59E0B;font-weight:800">${weekCounts.elevated}</span><span style="color:#94A3B8;font-size:13px;font-weight:400"> busy &nbsp;</span><span style="color:#10B981;font-weight:800">${weekCounts.ok}</span><span style="color:#94A3B8;font-size:13px;font-weight:400"> ok</span>
-        </div>
-        <div class="summary-sub">locations by peak day this week</div>
+        <div class="summary-label">Monitor</div>
+        <div class="summary-value">${weekCounts.elevated}</div>
+        <div class="summary-sub">location${weekCounts.elevated !== 1 ? 's' : ''} running stretched</div>
+      </div>
+      <div class="summary-card" data-tone="teal">
+        <div class="summary-label">In the Clear</div>
+        <div class="summary-value">${weekCounts.ok}</div>
+        <div class="summary-sub">location${weekCounts.ok !== 1 ? 's' : ''} with room to spare</div>
+      </div>
+      <div class="summary-card" data-tone="indigo">
+        <div class="summary-label">Most Active Site</div>
+        <div class="summary-value" style="font-size:${peakSite ? '15px' : '28px'};line-height:1.3">${peakSite ? escapeHtml(peakSite.loc) : '—'}</div>
+        <div class="summary-sub">${peakSite ? `Peak: ${peakSite.weekday} ${peakSite.mmdd} at ${Math.round(peakSite.util * 100)}%` : 'no activity this week'}</div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title">Week Ahead — Team Capacity</div>
-        <div class="text-muted">Utilization % per location per day · hover a cell for details</div>
+        <div class="text-muted">Green = room to spare &nbsp;·&nbsp; Amber = team is stretched &nbsp;·&nbsp; Red = consider support &nbsp;·&nbsp; hover a cell for details</div>
       </div>
       <div class="card-body" style="padding:16px 16px 12px">${weekGridHtml}</div>
     </div>
 
     <div class="card" style="margin-bottom:20px">
       <div class="card-header">
-        <div class="card-title">Location Busyness · Next 6 Weeks</div>
-        ${REF() ? `<select id="heatmap-mode" onchange="setHeatmapMode(this.value)" style="width:auto;max-width:260px;font-size:11px">
-          <option value="count"${heatmapMode==='count'?' selected':''}>Show: Raw count</option>
-          <option value="pct_primary_seats"${heatmapMode==='pct_primary_seats'?' selected':''}>Show: % of Primary Seats</option>
-          <option value="pct_expected_usage"${heatmapMode==='pct_expected_usage'?' selected':''}>Show: % of Expected Daily Usage</option>
-          <option value="vs_tt_baseline"${heatmapMode==='vs_tt_baseline'?' selected':''}>Show: % of Avg Tues-Thurs Badge</option>
+        <div>
+          <div class="card-title">Location Busyness · Next 6 Weeks</div>
+          <div class="text-muted" style="margin-top:2px">Each cell = meetings + events + travelers for that day · hover for breakdown · darker = busier</div>
+        </div>
+        ${REF() ? `<select id="heatmap-mode" onchange="setHeatmapMode(this.value)" style="width:auto;max-width:280px;font-size:11px">
+          <option value="count"${heatmapMode==='count'?' selected':''}>Show: Total activities</option>
+          <option value="pct_primary_seats"${heatmapMode==='pct_primary_seats'?' selected':''}>Show: % of seat capacity</option>
+          <option value="pct_expected_usage"${heatmapMode==='pct_expected_usage'?' selected':''}>Show: % of expected daily traffic</option>
+          <option value="vs_tt_baseline"${heatmapMode==='vs_tt_baseline'?' selected':''}>Show: % vs. Tue–Thu badge baseline</option>
         </select>` : ''}
       </div>
       <div class="card-body" id="heatmap-wrap" style="overflow-x:auto"></div>
@@ -1532,7 +1638,7 @@ function renderOverview(recs) {
       <div class="card-header">
         <div class="card-title">Model Controls</div>
         <div style="display:flex;gap:10px;align-items:center">
-          <button class="btn btn-sm btn-secondary" onclick="modelControlsOpen=!modelControlsOpen;document.getElementById('model-controls-body').classList.toggle('hidden',!modelControlsOpen)">Toggle</button>
+          <button class="btn btn-sm btn-secondary" onclick="modelControlsOpen=!modelControlsOpen;document.getElementById('model-controls-body').classList.toggle('hidden',!modelControlsOpen)">How is this calculated?</button>
           <button class="btn btn-sm btn-secondary" onclick="resetModel()">Reset</button>
         </div>
       </div>
@@ -1993,13 +2099,16 @@ function updateHeatmap(recs) {
     return;
   }
 
-  // counts[location][date] = total records of any type on that date at that location
+  // counts[location][date] = { total, meeting, event, traveler, space }
   const counts={};
   locations.forEach(loc => counts[loc] = {});
   recs.forEach(r => {
     const loc = r._canonicalSite || r.site;
     if (!loc || !counts[loc] || !r.date) return;
-    counts[loc][r.date] = (counts[loc][r.date] || 0) + 1;
+    if (!counts[loc][r.date]) counts[loc][r.date] = { total:0, meeting:0, event:0, traveler:0, space:0 };
+    counts[loc][r.date].total++;
+    const t = r._type || 'meeting';
+    counts[loc][r.date][t] = (counts[loc][r.date][t] || 0) + 1;
   });
 
   // Per-location denominator for the % modes — pulled directly from the master reference.
@@ -2015,7 +2124,7 @@ function updateHeatmap(recs) {
 
   const modeKey = heatmapMode || 'count';
   const valueFor = (loc, day) => {
-    const raw = counts[loc][day] || 0;
+    const raw = counts[loc][day]?.total || 0;
     if (modeKey === 'count' || !REF()) return { display: raw||'', numeric: raw, units: '' };
     const d = denoms[loc] || {};
     let denom = 0, label = '';
@@ -2032,7 +2141,7 @@ function updateHeatmap(recs) {
   if (maxV <= 0) maxV = 1;
   const hcls = v => !v?'heat-0':v/maxV<.25?'heat-1':v/maxV<.5?'heat-2':v/maxV<.75?'heat-3':'heat-4';
 
-  const modeLabel = { count:'records per day', pct_primary_seats:'% of primary seats', pct_expected_usage:'% of expected daily usage', vs_tt_baseline:'% of Avg Tues-Thurs badge' }[modeKey] || 'records per day';
+  const modeLabel = { count:'total activities per day', pct_primary_seats:'% of seat capacity', pct_expected_usage:'% of expected daily traffic', vs_tt_baseline:'% vs. Tue–Thu badge baseline' }[modeKey] || 'total activities per day';
 
   const cols=`140px repeat(${days.length},22px)`;
   let h=`<div style="display:grid;grid-template-columns:${cols};gap:2px;margin-bottom:3px"><div></div>`;
@@ -2043,7 +2152,19 @@ function updateHeatmap(recs) {
     h += `<div style="font-size:11px;color:#374151;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px" title="${loc}">${loc}</div>`;
     days.forEach(d => {
       const v = valueFor(loc, d);
-      const tip = `${loc}: ${counts[loc][d]||0} records on ${d}` + (v.units?` (${v.display} ${v.units})`:'') + (v.missing?' · no reference capacity for this location':'');
+      const dc = counts[loc][d] || {};
+      const total = dc.total || 0;
+      const bparts = [];
+      if (dc.meeting)  bparts.push(`${dc.meeting} mtg`);
+      if (dc.event)    bparts.push(`${dc.event} evt`);
+      if (dc.traveler) bparts.push(`${dc.traveler} traveler${dc.traveler>1?'s':''}`);
+      if (dc.space)    bparts.push(`${dc.space} reservation${dc.space>1?'s':''}`);
+      const breakdown = bparts.length ? ` — ${bparts.join(' · ')}` : '';
+      const dt = new Date(d+'T12:00:00');
+      const label = `${dt.toLocaleString('default',{weekday:'short'})} ${dt.getMonth()+1}/${dt.getDate()}`;
+      const tip = total
+        ? `${loc} · ${label}: ${total} activit${total===1?'y':'ies'}${breakdown}` + (v.units ? ` (${v.display} ${v.units})` : '') + (v.missing ? ' · no reference data' : '')
+        : `${loc} · ${label}: no activity`;
       h += `<div class="heat-cell ${hcls(v.numeric)}" title="${tip.replace(/"/g,'&quot;')}" style="${v.missing?'opacity:.55':''}">${v.display}</div>`;
     });
     h += '</div>';

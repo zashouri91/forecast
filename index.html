@@ -505,6 +505,7 @@ const STANDARD_FIELDS = [
   {key:'event_type',label:'Event Type',required:false},
   {key:'catering',label:'Catering / F&B',required:false},
   {key:'notes',label:'Notes',required:false},
+  {key:'why',label:'The Why / Purpose',required:false},
 ];
 
 const FIELD_ALIASES = {
@@ -526,6 +527,8 @@ const FIELD_ALIASES = {
   event_type:['event type','amenity_type','type','event category'],
   catering:['catering info','catering','f&b','fooda information','food delivery'],
   notes:['notes','meeting notes','additional information','cm notes','description'],
+  // 'The "Why"' column in the Planning Grid — event purpose/rationale
+  why:['the "why"', "the 'why'", 'the why', 'why', 'purpose', 'event purpose', 'business purpose', 'business reason'],
 };
 
 const RECORD_TYPES = [
@@ -701,6 +704,8 @@ const PREFERRED_ALIASES = {
   catering: new Set(['catering info']),
   // 'CM Captain' and 'CM Event Lead' are explicit CM role columns; beat generic 'Event Team Member' / 'Event Lead'.
   cm_captain: new Set(['cm captain', 'cm event lead']),
+  // 'Total Est Event Budget' is the pre-event planned budget — prefer it over 'Actual Event Spend'.
+  budget: new Set(['total est event budget', 'total estimated budget', 'estimated budget', 'planned budget']),
 };
 
 function autoMap(columns) {
@@ -940,6 +945,11 @@ function applyMappings() {
         state.filteredOutCount++;
         state.filteredOutBySource[name] = (state.filteredOutBySource[name]||0) + 1;
         return;
+      }
+      // Exclude weekends — CM operations are Mon–Fri only.
+      if (rec.date) {
+        const dow = new Date(rec.date + 'T12:00:00').getDay();
+        if (dow === 0 || dow === 6) return; // 0=Sunday, 6=Saturday
       }
       // For space reservations, only keep confirmed/reserved statuses.
       // Cancelled, pending, waitlisted, etc. should not count toward load or table totals.
@@ -1194,10 +1204,10 @@ const TABS = [
 // Which filter groups are visible per tab. Hidden chips still apply if previously set
 // (user can press Clear Filters to reset).
 const TAB_FILTERS = {
-  overview:  { site:1, region:1, cm:1, status:0 },
-  workspace: { site:1, region:1, cm:1, status:0 },
-  meetings:  { site:1, region:1, cm:1, status:0 },
-  events:    { site:1, region:1, cm:1, status:1 },
+  overview:  { site:1, status:0 },
+  workspace: { site:1, status:0 },
+  meetings:  { site:1, status:0 },
+  events:    { site:1, status:1 },
 };
 
 function todayStr() {
@@ -1278,20 +1288,6 @@ function renderDashboard() {
               ${sites.map(s=>`<span class="chip${filterState.sites.has(s)?' active':''}" onclick="toggleChip(this,'site','${jsString(s)}')">${escapeHtml(s)}</span>`).join('')}
             </div>
           </div>
-          ${regions.length ? `<div class="filter-group" id="fg-regions">
-            <div class="filter-label">Regional Leader</div>
-            <div class="filter-chips" id="fc-regions">
-              <span class="chip active" onclick="toggleChip(this,'region','all')">All</span>
-              ${regions.map(r=>`<span class="chip${filterState.regions.has(r)?' active':''}" onclick="toggleChip(this,'region','${jsString(r)}')">${escapeHtml(r)}</span>`).join('')}
-            </div>
-          </div>` : ''}
-          <div class="filter-group" id="fg-cms">
-            <div class="filter-label">CM Captain</div>
-            <div class="filter-chips" id="fc-cms">
-              <span class="chip active" onclick="toggleChip(this,'cm','all')">All</span>
-              ${cms.slice(0,40).map(c=>`<span class="chip${filterState.cms.has(c)?' active':''}" onclick="toggleChip(this,'cm','${jsString(c)}')">${escapeHtml(c)}</span>`).join('')}
-            </div>
-          </div>
           <div class="filter-group" id="fg-statuses">
             <div class="filter-label">Status</div>
             <div class="filter-chips" id="fc-statuses">
@@ -1310,7 +1306,7 @@ function renderDashboard() {
 
 function applyTabFilterVisibility() {
   const cfg = TAB_FILTERS[activeTab] || TAB_FILTERS.overview;
-  const map = { site:'fg-sites', region:'fg-regions', cm:'fg-cms', status:'fg-statuses' };
+  const map = { site:'fg-sites', status:'fg-statuses' };
   Object.entries(map).forEach(([k, id]) => {
     const el = document.getElementById(id);
     if (el) el.style.display = cfg[k] ? '' : 'none';
@@ -1408,10 +1404,8 @@ function refreshDash() {
 function activeFilterPills() {
   const out = [];
   const set = (k) => filterState[k];
-  if (!set('sites').has('all'))    out.push({k:'sites',    label:'Location',         vals:[...set('sites')]});
-  if (!set('regions').has('all'))  out.push({k:'regions',  label:'Regional Leader',  vals:[...set('regions')]});
-  if (!set('cms').has('all'))      out.push({k:'cms',      label:'CM Captain',       vals:[...set('cms')]});
-  if (!set('statuses').has('all')) out.push({k:'statuses', label:'Status',           vals:[...set('statuses')]});
+  if (!set('sites').has('all'))    out.push({k:'sites',    label:'Location', vals:[...set('sites')]});
+  if (!set('statuses').has('all')) out.push({k:'statuses', label:'Status',   vals:[...set('statuses')]});
   return out;
 }
 
@@ -2007,16 +2001,14 @@ function renderEvents(recs) {
         <div class="text-muted">${recs.length.toLocaleString()} records · click any column to sort</div>
       </div>
       <div style="max-height:720px;overflow-y:auto">${renderSortableTable('events', recs, [
-        { label:'Date',        get:r=>r.date, cell:fmtDateCell },
-        { label:'Time',        get:r=>r.time||'' },
-        { label:'Location',    get:r=>r._canonicalSite||r.site||'' },
-        { label:'Event Name',  get:r=>r.event_name||'', cell:r=>`<div style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${escapeHtml(r.event_name||'—')}</div>` },
-        { label:'CM Lead',     get:r=>r.cm_captain||'' },
-        { label:'# Attendees', get:r=>r.attendees||0, cell:r=>r.attendees>0?`<div style="text-align:right;font-weight:600">${r.attendees.toLocaleString()}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
-        { label:'Budget',      get:r=>r.budget||0, cell:r=>r.budget>0?`<div style="text-align:right;font-weight:600;color:#065F46">${fmtMoney(r.budget)}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
-        { label:'Room',        get:r=>r.room||'', cell:r=>`<div style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.room||'')}">${escapeHtml(r.room||'—')}</div>` },
-        { label:'Event Type',  get:r=>r.event_type||'' },
-        { label:'Status',      get:r=>r.status||'', cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${escapeHtml(r.status)}</span>`:'—' },
+        { label:'Date',           get:r=>r.date,            cell:fmtDateCell },
+        { label:'Time',           get:r=>r.time||'' },
+        { label:'Location',       get:r=>r._canonicalSite||r.site||'' },
+        { label:'Event Name',     get:r=>r.event_name||'',  cell:r=>`<div style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${escapeHtml(r.event_name||'—')}</div>` },
+        { label:'The Why',        get:r=>r.why||'',         cell:r=>r.why?`<div style="max-width:260px;white-space:normal;line-height:1.45;font-size:12px;color:#374151">${escapeHtml(r.why)}</div>`:'<span class="text-muted">—</span>' },
+        { label:'Est. Budget',    get:r=>r.budget||0,       cell:r=>r.budget>0?`<div style="text-align:right;font-weight:600;color:#065F46">${fmtMoney(r.budget)}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
+        { label:'Event Location', get:r=>r.room||'',        cell:r=>`<div style="max-width:200px;white-space:normal;line-height:1.4;font-size:12px">${escapeHtml(r.room||'—')}</div>` },
+        { label:'Event Type',     get:r=>r.event_type||'' },
       ])}</div>
     </div>`;
 }
@@ -2187,7 +2179,7 @@ function stsCls(s) {
 
 function exportCSV() {
   const recs=getFiltered();
-  const fields=['_source','_type','date','end_date','site','_canonicalSite','_buildingRefId','_state','_regionalLeader','event_name','status','attendees','vip','budget','cm_captain','time','room','event_type','catering','notes'];
+  const fields=['_source','_type','date','end_date','site','_canonicalSite','_buildingRefId','_state','_regionalLeader','event_name','status','attendees','vip','budget','cm_captain','time','room','event_type','catering','notes','why'];
   const fmt = (v) => Array.isArray(v) ? v.join(' / ') : (v==null?'':String(v));
   const rows=[fields.join(','),...recs.map(r=>fields.map(f=>`"${fmt(r[f]).replace(/"/g,'""')}"`).join(','))];
   const blob=new Blob([rows.join('\n')],{type:'text/csv'});

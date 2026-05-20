@@ -1812,76 +1812,98 @@ function renderWeekAheadGrid(recs, stats) {
     });
   });
 
+  // Build per-site-per-day record lookup for detail list
+  const byLocDay = {};
+  recs.forEach(r => {
+    const loc = r._canonicalSite || r.site;
+    if (!loc || !r.date) return;
+    if (!byLocDay[loc]) byLocDay[loc] = {};
+    if (!byLocDay[loc][r.date]) byLocDay[loc][r.date] = [];
+    byLocDay[loc][r.date].push(r);
+  });
+
   const C = {
-    high:     { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B', label: 'High' },
-    elevated: { bg: '#FFFBEB', border: '#FDE68A', text: '#92400E', label: 'Busy' },
-    normal:   { bg: '#F0FDF4', border: '#BBF7D0', text: '#065F46', label: 'OK' },
+    high:     { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B', headerBg: '#FEE2E2', label: 'High' },
+    elevated: { bg: '#FFFBEB', border: '#FDE68A', text: '#92400E', headerBg: '#FEF3C7', label: 'Busy' },
+    normal:   { bg: '#F0FDF4', border: '#BBF7D0', text: '#065F46', headerBg: '#DCFCE7', label: 'OK' },
   };
 
+  // Type styles for record rows
+  const T = {
+    meeting:  { dot: '#3B82F6', label: 'Mtg' },
+    event:    { dot: '#EC4899', label: 'Evt' },
+    traveler: { dot: '#10B981', label: 'Trvl' },
+  };
+
+  function recRow(r) {
+    const t = T[r._type] || T.meeting;
+    const name = r.event_name || r.vip || '—';
+    const truncName = name.length > 28 ? name.slice(0, 26) + '…' : name;
+    const meta = [];
+    if (r.attendees > 0) meta.push(`${r.attendees} ppl`);
+    if (hasVip(r) && r._type !== 'traveler') meta.push(`★ ${String(r.vip).length > 18 ? String(r.vip).slice(0,16)+'…' : r.vip}`);
+    return `<div style="display:flex;align-items:flex-start;gap:5px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.05)">
+      <span style="width:7px;height:7px;border-radius:50%;background:${t.dot};flex-shrink:0;margin-top:3px"></span>
+      <div style="min-width:0">
+        <div style="font-size:10px;font-weight:600;color:#1E293B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(name)}">${escapeHtml(truncName)}</div>
+        ${meta.length ? `<div style="font-size:9px;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(meta.join(' · '))}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
   let html = `<div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;min-width:520px">
+    <table style="border-collapse:collapse;table-layout:fixed;width:100%">
+      <colgroup>
+        <col style="width:140px">
+        ${days.map(() => `<col style="width:200px">`).join('')}
+      </colgroup>
       <thead><tr>
-        <th style="text-align:left;padding:8px 14px 10px;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #E2E8F0;min-width:130px">Location</th>
+        <th style="text-align:left;padding:8px 14px 10px;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #E2E8F0">Location</th>
         ${dayMeta.map(h => `
-          <th style="text-align:center;padding:8px 4px 10px;min-width:82px;border-bottom:2px solid ${h.isToday ? '#4338CA' : '#E2E8F0'};background:${h.isToday ? '#F5F3FF' : 'transparent'}">
-            <div style="font-size:11px;font-weight:700;color:${h.isToday ? '#4338CA' : h.isWeekend ? '#94A3B8' : '#374151'}">${h.weekday}</div>
-            <div style="font-size:11px;color:${h.isToday ? '#6366F1' : h.isWeekend ? '#CBD5E1' : '#94A3B8'}">${h.mmdd}</div>
+          <th style="text-align:left;padding:8px 10px 10px;border-bottom:2px solid ${h.isToday ? '#4338CA' : '#E2E8F0'};background:${h.isToday ? '#F5F3FF' : 'transparent'}">
+            <div style="font-size:12px;font-weight:700;color:${h.isToday ? '#4338CA' : '#374151'}">${h.weekday}</div>
+            <div style="font-size:11px;color:${h.isToday ? '#6366F1' : '#94A3B8'}">${h.mmdd}</div>
           </th>`).join('')}
       </tr></thead>
       <tbody>`;
 
   locations.forEach((loc, idx) => {
-    html += `<tr style="background:${idx%2===0?'#FAFAFA':'#FFFFFF'}">`;
-    const weekRecs = siteWeekCounts[loc] || 0;
-    const weekRecLabel = hasData
-      ? (weekRecs > 0
-          ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px">${weekRecs} activit${weekRecs===1?'y':'ies'} this week</div>`
-          : `<div style="font-size:10px;color:#94A3B8;font-style:italic;margin-top:1px">no data uploaded for this week</div>`)
-      : '';
-    html += `<td style="padding:10px 14px;border-bottom:1px solid #F1F5F9">
-      <div style="font-size:13px;font-weight:600;color:#1E293B;white-space:nowrap">${escapeHtml(loc)}</div>
-      ${weekRecLabel}
+    html += `<tr style="background:${idx%2===0?'#FAFAFA':'#FFFFFF'};vertical-align:top">`;
+    const cmList = REF()?.bySiteName?.[loc.toLowerCase()]?.assignedCMs || [];
+    html += `<td style="padding:10px 14px;border-bottom:1px solid #F1F5F9;border-right:1px solid #F1F5F9">
+      <div style="font-size:12px;font-weight:700;color:#1E293B">${escapeHtml(loc)}</div>
+      ${cmList.length ? `<div style="font-size:10px;color:#94A3B8;margin-top:2px">${cmList.map(escapeHtml).join(', ')}</div>` : ''}
     </td>`;
+
     dayMeta.forEach(h => {
       const row = stats[loc]?.[h.d];
-      const tdStyle = `padding:6px 4px;border-bottom:1px solid #F1F5F9;text-align:center;${h.isToday ? 'background:#F5F3FF;' : ''}`;
-      const hasActivity = row && (row.meetings || row.events || row.travelers);
-      if (!hasActivity) {
-        const inner = hasData
-          ? `<span style="font-size:12px;color:#CBD5E1;font-weight:500">—</span>`
-          : '';
-        html += `<td style="${tdStyle}">${inner}</td>`;
+      const dayRecs = (byLocDay[loc]?.[h.d] || []).filter(r => r._type !== 'space');
+      const ptoOut = (row?.ptoOut) || getPTO(loc, h.d);
+      const tdBase = `padding:0;border-bottom:1px solid #F1F5F9;border-right:1px solid #F1F5F9;${h.isToday ? 'background:#F9F8FF;' : ''}`;
+
+      if (!dayRecs.length && !ptoOut) {
+        html += `<td style="${tdBase}"><div style="padding:10px;font-size:11px;color:#CBD5E1;text-align:center">—</div></td>`;
         return;
       }
-      const status = row.flags?.status || riskStatus(row.util, false);
+
+      const status = row ? (row.flags?.status || riskStatus(row.util, false)) : 'normal';
       const c = C[status] || C.normal;
-      const utilPct = Math.round(row.util * 100);
-      const cmCount = rawCMCountForSite(loc);
-      const ptoOut = row.ptoOut || getPTO(loc, h.d);
-      const vsTypical = row.util / MODEL.thrElevated;
-      // Tooltip — full detail on hover
-      const tipParts = [];
-      if (row.meetings)  tipParts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
-      if (row.events)    tipParts.push(`${row.events} event${row.events>1?'s':''}`);
-      if (row.travelers) tipParts.push(`${row.travelers.toFixed(row.travelers%1?1:0)} VP+ Traveler${row.travelers===1?'':'s'}`);
-      if (ptoOut)        tipParts.push(`${ptoOut} CM on PTO`);
-      const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% load · ${tipParts.join(' · ')} · ${vsTypical.toFixed(1)}× vs typical`);
-      // Color-coded mini chips: M = meetings (blue), E = events (pink), T = travelers (green), R = space reservations (amber)
-      // Counts from the raw heatmap data (includes spaces, which stats doesn't track)
-      const rawDay = (function() { // pull space count from heatmap counts if available
-        try { return null; } catch(_) { return null; } // placeholder — spaces shown via reservations tab
-      })();
-      const chips = [
-        row.meetings  ? `<span style="background:#DBEAFE;color:#1D4ED8;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap">${row.meetings}M</span>` : '',
-        row.events    ? `<span style="background:#FCE7F3;color:#BE185D;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap">${row.events}E</span>` : '',
-        row.travelers ? `<span style="background:#D1FAE5;color:#065F46;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap">${row.travelers.toFixed(row.travelers%1?1:0)}T</span>` : '',
-        ptoOut        ? `<span style="background:#FEF3C7;color:#92400E;font-size:9px;font-weight:600;padding:1px 5px;border-radius:8px;white-space:nowrap">${ptoOut} PTO</span>` : '',
-      ].filter(Boolean).join('');
-      html += `<td style="${tdStyle}" title="${tip}">
-        <div style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;background:${c.bg};border:1px solid ${c.border};border-radius:6px;padding:7px 8px;min-width:80px">
-          <span style="font-size:13px;font-weight:700;color:${c.text};line-height:1">${utilPct}%</span>
-          <span style="font-size:9px;font-weight:700;color:${c.text};opacity:.85;line-height:1;text-transform:uppercase;letter-spacing:.05em">${c.label}</span>
-          ${chips ? `<div style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin-top:1px">${chips}</div>` : ''}
+      const utilPct = row ? Math.round(row.util * 100) : (ptoOut ? Math.round((MODEL.baselineLoad||0)) : 0);
+
+      const recItems = dayRecs.map(recRow).join('');
+      const ptoItem = ptoOut
+        ? `<div style="display:flex;align-items:center;gap:5px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.05)">
+            <span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;flex-shrink:0;margin-top:1px"></span>
+            <div style="font-size:10px;font-weight:600;color:#92400E">${ptoOut} CM on PTO</div>
+          </div>` : '';
+
+      html += `<td style="${tdBase}">
+        <div style="border-left:3px solid ${c.border}">
+          <div style="background:${c.headerBg};padding:5px 8px;display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <span style="font-size:11px;font-weight:700;color:${c.text}">${utilPct}%</span>
+            <span style="font-size:9px;font-weight:700;color:${c.text};text-transform:uppercase;letter-spacing:.05em;opacity:.8">${c.label}</span>
+          </div>
+          <div style="padding:4px 8px 6px">${recItems}${ptoItem}</div>
         </div>
       </td>`;
     });
@@ -1890,18 +1912,16 @@ function renderWeekAheadGrid(recs, stats) {
 
   html += `</tbody></table></div>
   <div style="display:flex;gap:16px;margin-top:14px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0">
-    <span style="font-size:11px;color:#64748B;font-weight:700">How to read this:</span>
+    <span style="font-size:11px;color:#64748B;font-weight:700">How to read:</span>
     <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Green</b> — capacity to spare</span></div>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Amber</b> — stretched, monitor</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Amber</b> — stretched</span></div>
     <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Red</b> — at/over capacity</span></div>
-    <div style="display:flex;align-items:center;gap:6px;border-left:1px solid #E2E8F0;padding-left:12px">
-      <span style="font-size:11px;color:#64748B;font-weight:600">Chips:</span>
-      <span style="background:#DBEAFE;color:#1D4ED8;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">M</span><span style="font-size:10px;color:#64748B">Meetings</span>
-      <span style="background:#FCE7F3;color:#BE185D;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">E</span><span style="font-size:10px;color:#64748B">Events</span>
-      <span style="background:#D1FAE5;color:#065F46;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">T</span><span style="font-size:10px;color:#64748B">Travelers</span>
-      <span style="background:#FEF3C7;color:#92400E;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">PTO</span><span style="font-size:10px;color:#64748B">CM out</span>
+    <div style="display:flex;align-items:center;gap:8px;border-left:1px solid #E2E8F0;padding-left:12px">
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#3B82F6;display:inline-block"></span><span style="font-size:10px;color:#64748B">Meeting</span></div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#EC4899;display:inline-block"></span><span style="font-size:10px;color:#64748B">Event</span></div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block"></span><span style="font-size:10px;color:#64748B">Traveler</span></div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block"></span><span style="font-size:10px;color:#64748B">CM on PTO</span></div>
     </div>
-    <span style="font-size:11px;color:#94A3B8">Hover any cell for full details.</span>
   </div>`;
 
   return { html, weekCounts, peakSite };

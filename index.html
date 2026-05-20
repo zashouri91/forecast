@@ -980,6 +980,22 @@ function applyMappings() {
 const valEdits = {};
 let valWindowDays = 10;
 
+// PTO tracking: { site: { date: numCMsOut } }
+// Entered during validation, factored into capacity in buildSiteDayStats.
+const ptoDays = {};
+
+function setPTO(site, date, count) {
+  if (!ptoDays[site]) ptoDays[site] = {};
+  const n = parseInt(count, 10);
+  if (n > 0) ptoDays[site][date] = n;
+  else delete ptoDays[site][date];
+  renderValidationStep();
+}
+
+function getPTO(site, date) {
+  return (ptoDays[site] && ptoDays[site][date]) ? ptoDays[site][date] : 0;
+}
+
 function getValidationWindow() {
   const today = todayStr();
   const end = addDays(today, valWindowDays - 1);
@@ -1092,6 +1108,27 @@ function renderValidationStep() {
       </tr>`;
     }).join('');
 
+    // Build PTO row: one cell per weekday in the window
+    const { today: winStart, end: winEnd } = getValidationWindow();
+    const winDays = Array.from({length: valWindowDays + 4}, (_, i) => addDays(winStart, i))
+      .filter(d => { const dow = new Date(d + 'T12:00:00').getDay(); return dow !== 0 && dow !== 6; })
+      .filter(d => d <= winEnd);
+    const maxCMs = cmList.length || rawCMCountForSite(site) || 4;
+    const cmOptions = Array.from({length: maxCMs + 1}, (_, i) => i)
+      .map(n => `<option value="${n}">${n === 0 ? '0 — all in' : n === 1 ? '1 out' : n + ' out'}</option>`).join('');
+    const ptoCells = winDays.map(d => {
+      const dt = new Date(d + 'T12:00:00');
+      const label = `${dt.toLocaleString('default',{weekday:'short'})} ${dt.getMonth()+1}/${dt.getDate()}`;
+      const cur = getPTO(site, d);
+      const siteJs = jsString(site);
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="font-size:10px;font-weight:600;color:#64748B;white-space:nowrap">${label}</div>
+        <select onchange="setPTO('${siteJs}','${d}',this.value)" style="font-size:10px;padding:1px 2px;border:1px solid ${cur > 0 ? '#FDE68A' : '#E2E8F0'};border-radius:4px;background:${cur > 0 ? '#FFFBEB' : 'white'};color:${cur > 0 ? '#92400E' : '#374151'}">
+          ${Array.from({length: maxCMs + 1}, (_, n) => `<option value="${n}"${cur === n ? ' selected' : ''}>${n === 0 ? '0 — all in' : n === 1 ? '1 out' : n + ' out'}</option>`).join('')}
+        </select>
+      </div>`;
+    }).join('');
+
     return `<div class="card" style="margin-bottom:18px">
       <div class="card-header" style="background:#F8FAFC">
         <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
@@ -1100,6 +1137,10 @@ function renderValidationStep() {
           <span style="font-size:12px;color:#94A3B8">${entries.length} record${entries.length !== 1 ? 's' : ''} in window</span>
           ${cmList.length ? `<span style="font-size:12px;color:#64748B">· CMs: ${cmList.map(escapeHtml).join(', ')}</span>` : ''}
         </div>
+      </div>
+      <div style="padding:10px 18px;border-bottom:1px solid #F1F5F9;background:#FAFCFF">
+        <div style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">CMs on PTO — select how many are out each day</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">${ptoCells}</div>
       </div>
       <div style="overflow-x:auto">
         <table class="upcoming-table" style="font-size:12px">
@@ -1349,10 +1390,15 @@ function buildSiteDayStats(records) {
 
   // compute load + utilization
   Object.keys(stats).forEach(site => {
-    const cap = dailyCapacity(site);
     Object.keys(stats[site]).forEach(date => {
       const row = stats[site][date];
+      // PTO-aware capacity: subtract any CMs marked out on this specific day
+      const rawCMs = rawCMCountForSite(site);
+      const ptoOut = getPTO(site, date);
+      const effectiveCMs = Math.max(0, rawCMs - ptoOut) * MODEL.ptoFactor;
+      const cap = effectiveCMs * MODEL.meetingEqPerDay;
       row.capacity = cap;
+      row.ptoOut = ptoOut; // carry through for tooltip display
       row.load = (
         (row.meetings * MODEL.wMeeting) +
         (row.events * MODEL.wEvent) +
@@ -1686,7 +1732,10 @@ function countBy(recs, key) {
 
 function renderWeekAheadGrid(recs, stats) {
   const today = todayStr();
-  const days = Array.from({length: 7}, (_, i) => addDays(today, i));
+  // Generate next 14 calendar days then keep only Mon–Fri (CM ops are weekdays only)
+  const days = Array.from({length: 14}, (_, i) => addDays(today, i))
+    .filter(d => { const dow = new Date(d + 'T12:00:00').getDay(); return dow !== 0 && dow !== 6; })
+    .slice(0, 5); // show exactly the next 5 business days
   const locations = REF() ? REF().sites.map(s => s.siteName)
     : [...new Set(recs.map(r => r._canonicalSite || r.site).filter(Boolean))].sort();
 
@@ -1786,19 +1835,20 @@ function renderWeekAheadGrid(recs, stats) {
       const status = row.flags?.status || riskStatus(row.util, false);
       const c = C[status] || C.normal;
       const utilPct = Math.round(row.util * 100);
-      const cap = dailyCapacity(loc);
       const cmCount = rawCMCountForSite(loc);
+      const ptoOut = row.ptoOut || getPTO(loc, h.d);
       const vsTypical = row.util / MODEL.thrElevated;
       const parts = [];
       if (row.events)    parts.push(`${row.events} event${row.events>1?'s':''}`);
       if (row.meetings)  parts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
       if (row.travelers) parts.push(`${row.travelers} traveler${row.travelers>1?'s':''}`);
-      const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% utilized · ${parts.join(' · ')}${cap ? ` · Capacity ${cap.toFixed(1)}` : ''} · ${vsTypical.toFixed(1)}× busier than usual`);
+      if (ptoOut)        parts.push(`${ptoOut} CM on PTO`);
+      const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% utilized · ${parts.join(' · ')} · ${vsTypical.toFixed(1)}× busier than usual`);
       const driverParts = [];
       if (row.events)    driverParts.push(`${row.events} event${row.events>1?'s':''}`);
       if (row.meetings)  driverParts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
       if (row.travelers) driverParts.push(`${row.travelers} traveler${row.travelers>1?'s':''}`);
-      if (cmCount)       driverParts.push(`${cmCount} mgr${cmCount>1?'s':''}`);
+      if (cmCount)       driverParts.push(`${cmCount - ptoOut} of ${cmCount} CM${cmCount>1?'s':''}`);
       const driverStr = driverParts.slice(0, 3).join(' · ');
       const vsStr = status !== 'normal' ? `${vsTypical.toFixed(1)}× busier than usual` : null;
       html += `<td style="${tdStyle}" title="${tip}">
@@ -1865,22 +1915,6 @@ function renderOverview(recs) {
         </div>
       </div>
       <div class="card-body" style="padding:16px 16px 12px">${weekGridHtml}</div>
-    </div>
-
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Location Busyness — Next 6 Weeks</div>
-          <div class="text-muted" style="margin-top:2px">Each cell represents the total activities (meetings, events, travelers) at that location on that day — darker means busier. Hover any cell for a breakdown.</div>
-        </div>
-        ${REF() ? `<select id="heatmap-mode" onchange="setHeatmapMode(this.value)" style="width:auto;max-width:280px;font-size:11px">
-          <option value="count"${heatmapMode==='count'?' selected':''}>Show: Total activities</option>
-          <option value="pct_primary_seats"${heatmapMode==='pct_primary_seats'?' selected':''}>Show: % of seat capacity</option>
-          <option value="pct_expected_usage"${heatmapMode==='pct_expected_usage'?' selected':''}>Show: % of expected daily traffic</option>
-          <option value="vs_tt_baseline"${heatmapMode==='vs_tt_baseline'?' selected':''}>Show: % vs. Tue–Thu badge baseline</option>
-        </select>` : ''}
-      </div>
-      <div class="card-body" id="heatmap-wrap" style="overflow-x:auto"></div>
     </div>
 
     <div class="card">
@@ -2039,7 +2073,6 @@ function renderOverview(recs) {
     </div>
   `;
 
-  updateHeatmap(recs);
 }
 function nextNDayDigest(recs, n) {
   const today = todayStr();

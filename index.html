@@ -1011,10 +1011,11 @@ function applyValEdits() {
 
 function renderValidationStep() {
   const { today, end } = getValidationWindow();
-  // Get records within window, from already-applied mappings
+  // Get records within window — skip PulsePoint Space Report records (space/desk
+  // reservations are auto-validated upstream and don't need manual review here).
   const inWindow = state.records
     .map((r, i) => ({ r, i }))
-    .filter(({ r }) => r.date && r.date >= today && r.date <= end);
+    .filter(({ r }) => r.date && r.date >= today && r.date <= end && r._type !== 'space');
 
   const bySite = {};
   inWindow.forEach(({ r, i }) => {

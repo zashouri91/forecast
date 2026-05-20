@@ -2,117 +2,428 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>PulsePoint CM Forecast Tool</title>
+<title>PulsePoint Community Manager Forecast</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- BEGIN REFERENCE -->
+<script>
+// Baked from reference.xlsx by scripts/bake-reference.mjs — do not hand-edit.
+(function(){
+var SITES = [
+  {
+    "buildingReferenceId": "2692",
+    "buildingRefId": "2692",
+    "spacesLocationId": "GA02",
+    "siteName": "Atlanta",
+    "location": "ATLANTA, 740 W PEACHTREE ST NW",
+    "siteType": "PulsePoint",
+    "state": "GA",
+    "regionalLeader": "Melissa Lau-VanNetta",
+    "assignedCMs": [
+      "Farid Yusuf-Sada",
+      "Kiki McCoy",
+      "Unique Walters"
+    ],
+    "capacity": {
+      "activeSqFt": 420489,
+      "meetingRooms": 110,
+      "capsules": 60,
+      "primarySeats": 985,
+      "choiceSeats": 2785,
+      "privateOffices": 76,
+      "workstations": 911,
+      "assignedWorkers": 4190
+    },
+    "baseline": {
+      "expectedDailyUsage": 727,
+      "avgTuesThurBadge": 523,
+      "avgWeeklyPeak": 612
+    }
+  },
+  {
+    "buildingReferenceId": "RP",
+    "buildingRefId": "RP",
+    "spacesLocationId": "233",
+    "siteName": "Chicago",
+    "location": "CHICAGO, 233 S WACKER DR, STE 3700",
+    "siteType": "PulsePoint",
+    "state": "IL",
+    "regionalLeader": "Katie Bartmess",
+    "assignedCMs": [
+      "Ruth Flores"
+    ],
+    "capacity": {
+      "activeSqFt": 36195,
+      "meetingRooms": 11,
+      "capsules": 2,
+      "primarySeats": 128,
+      "choiceSeats": 217,
+      "privateOffices": 13,
+      "workstations": 111,
+      "assignedWorkers": 970
+    },
+    "baseline": {
+      "expectedDailyUsage": 184,
+      "avgTuesThurBadge": 76,
+      "avgWeeklyPeak": 87
+    }
+  },
+  {
+    "buildingReferenceId": "2030",
+    "buildingRefId": "2030",
+    "spacesLocationId": "700",
+    "siteName": "Denver",
+    "location": "DENVER, 700 BROADWAY",
+    "siteType": "PulsePoint",
+    "state": "CO",
+    "regionalLeader": "Kelly Robertson",
+    "assignedCMs": [
+      "Matthew Blanchard"
+    ],
+    "capacity": {
+      "activeSqFt": 92786,
+      "meetingRooms": 19,
+      "capsules": 4,
+      "primarySeats": 202,
+      "choiceSeats": 268,
+      "privateOffices": 8,
+      "workstations": 190,
+      "assignedWorkers": 4328
+    },
+    "baseline": {
+      "expectedDailyUsage": 489,
+      "avgTuesThurBadge": 140,
+      "avgWeeklyPeak": 157
+    }
+  },
+  {
+    "buildingReferenceId": "2025",
+    "buildingRefId": "2025",
+    "spacesLocationId": "2025",
+    "siteName": "Indianapolis",
+    "location": "INDIANAPOLIS, 220 VIRGINIA AVE",
+    "siteType": "PulsePoint",
+    "state": "IN",
+    "regionalLeader": "Kelly Robertson",
+    "assignedCMs": [
+      "Mindy Pratt",
+      "Robyn Riley",
+      "Sydney Law"
+    ],
+    "capacity": {
+      "activeSqFt": 541816,
+      "meetingRooms": 48,
+      "capsules": 2,
+      "primarySeats": 850,
+      "choiceSeats": 332,
+      "privateOffices": 55,
+      "workstations": 751,
+      "assignedWorkers": 6880
+    },
+    "baseline": {
+      "expectedDailyUsage": 1084,
+      "avgTuesThurBadge": 657,
+      "avgWeeklyPeak": 708
+    }
+  },
+  {
+    "buildingReferenceId": "2044",
+    "buildingRefId": "2044",
+    "spacesLocationId": "4361",
+    "siteName": "Mason",
+    "location": "MASON, 4361 IRWIN SIMPSON RD",
+    "siteType": "PulsePoint",
+    "state": "OH",
+    "regionalLeader": "Katie Bartmess",
+    "assignedCMs": [
+      "Emily Nagyvathy",
+      "Katie Bartmess"
+    ],
+    "capacity": {
+      "activeSqFt": 213000,
+      "meetingRooms": 54,
+      "capsules": 17,
+      "primarySeats": 475,
+      "choiceSeats": 880,
+      "privateOffices": 33,
+      "workstations": 453,
+      "assignedWorkers": 2538
+    },
+    "baseline": {
+      "expectedDailyUsage": 562,
+      "avgTuesThurBadge": 421,
+      "avgWeeklyPeak": 455
+    }
+  },
+  {
+    "buildingReferenceId": "VA19",
+    "buildingRefId": "VA19",
+    "spacesLocationId": "5800",
+    "siteName": "Norfolk",
+    "location": "NORFOLK, 5800 NORTHAMPTON BLVD",
+    "siteType": "PulsePoint",
+    "state": "VA",
+    "regionalLeader": "Erin Casey",
+    "assignedCMs": [
+      "Aniya Johnson",
+      "Erin Casey"
+    ],
+    "capacity": {
+      "activeSqFt": 214049,
+      "meetingRooms": 54,
+      "capsules": 11,
+      "primarySeats": 620,
+      "choiceSeats": 1052,
+      "privateOffices": 29,
+      "workstations": 574,
+      "assignedWorkers": 3457
+    },
+    "baseline": {
+      "expectedDailyUsage": 674,
+      "avgTuesThurBadge": 465,
+      "avgWeeklyPeak": 498
+    }
+  },
+  {
+    "buildingReferenceId": "3099",
+    "buildingRefId": "3099",
+    "spacesLocationId": "3099",
+    "siteName": "NY Penn1",
+    "location": "NEW YORK, ONE PENN PLAZA, 35TH AND 36TH FL",
+    "siteType": "PulsePoint",
+    "state": "NY",
+    "regionalLeader": "Melissa Lau-VanNetta",
+    "assignedCMs": [
+      "Jay Mattila"
+    ],
+    "capacity": {
+      "activeSqFt": 72721,
+      "meetingRooms": 19,
+      "capsules": 11,
+      "primarySeats": 203,
+      "choiceSeats": 472,
+      "privateOffices": 10,
+      "workstations": 187,
+      "assignedWorkers": 1364
+    },
+    "baseline": {
+      "expectedDailyUsage": 227,
+      "avgTuesThurBadge": 116,
+      "avgWeeklyPeak": 145
+    }
+  },
+  {
+    "buildingReferenceId": "VA4348",
+    "buildingRefId": "VA4348",
+    "spacesLocationId": "2015",
+    "siteName": "Richmond",
+    "location": "RICHMOND, 2015 STAPLES MILL RD,",
+    "siteType": "PulsePoint",
+    "state": "VA",
+    "regionalLeader": "Erin Casey",
+    "assignedCMs": [
+      "Alexis Jones-Avent",
+      "Victoria Banks"
+    ],
+    "capacity": {
+      "activeSqFt": 311476,
+      "meetingRooms": 52,
+      "capsules": 32,
+      "primarySeats": 509,
+      "choiceSeats": 382,
+      "privateOffices": 10,
+      "workstations": 489,
+      "assignedWorkers": 3066
+    },
+    "baseline": {
+      "expectedDailyUsage": 555,
+      "avgTuesThurBadge": 419,
+      "avgWeeklyPeak": 485
+    }
+  },
+  {
+    "buildingReferenceId": "2682",
+    "buildingRefId": "2682",
+    "spacesLocationId": "21215",
+    "siteName": "Woodland Hills",
+    "location": "WOODLAND HILLS, 21215 BURBANK BLVD",
+    "siteType": "PulsePoint",
+    "state": "CA",
+    "regionalLeader": "Kelly Robertson",
+    "assignedCMs": [
+      "Carolina Herrera",
+      "Yunoka Doyle"
+    ],
+    "capacity": {
+      "activeSqFt": 101169,
+      "meetingRooms": 33,
+      "capsules": 3,
+      "primarySeats": 442,
+      "choiceSeats": 505,
+      "privateOffices": 26,
+      "workstations": 409,
+      "assignedWorkers": 3134
+    },
+    "baseline": {
+      "expectedDailyUsage": 501,
+      "avgTuesThurBadge": 325,
+      "avgWeeklyPeak": 374
+    }
+  }
+];
+var BY_SITE_NAME = {
+  "atlanta": 0,
+  "chicago": 1,
+  "denver": 2,
+  "indianapolis": 3,
+  "mason": 4,
+  "norfolk": 5,
+  "ny penn1": 6,
+  "richmond": 7,
+  "woodland hills": 8
+};
+var BY_BUILDING_REF = {
+  "2025": 3,
+  "2030": 2,
+  "2044": 4,
+  "2682": 8,
+  "2692": 0,
+  "3099": 6,
+  "RP": 1,
+  "VA19": 5,
+  "VA4348": 7
+};
+var BY_LOC_UPPER = {
+  "ATLANTA, 740 W PEACHTREE ST NW": 0,
+  "CHICAGO, 233 S WACKER DR, STE 3700": 1,
+  "DENVER, 700 BROADWAY": 2,
+  "INDIANAPOLIS, 220 VIRGINIA AVE": 3,
+  "MASON, 4361 IRWIN SIMPSON RD": 4,
+  "NORFOLK, 5800 NORTHAMPTON BLVD": 5,
+  "NEW YORK, ONE PENN PLAZA, 35TH AND 36TH FL": 6,
+  "RICHMOND, 2015 STAPLES MILL RD,": 7,
+  "WOODLAND HILLS, 21215 BURBANK BLVD": 8
+};
+var BY_SPACES_LOC = {
+  "233": 1,
+  "700": 2,
+  "2015": 7,
+  "2025": 3,
+  "3099": 6,
+  "4361": 4,
+  "5800": 5,
+  "21215": 8,
+  "GA02": 0
+};
+function deref(m){var o={};for(var k in m){o[k]=SITES[m[k]];}return o;}
+window.CM_REFERENCE = {
+  version: "2026-05-14",
+  source: "reference.xlsx",
+  sites: SITES,
+  bySiteName: deref(BY_SITE_NAME),
+  byBuildingRefId: deref(BY_BUILDING_REF),
+  byLocationUpper: deref(BY_LOC_UPPER),
+  bySpacesLocationId: deref(BY_SPACES_LOC)
+};
+})();
+</script>
+<!-- END REFERENCE -->
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F1F5F9;color:#1E293B;min-height:100vh}
-.header{background:linear-gradient(135deg,#312E81 0%,#4338CA 100%);color:white;padding:14px 28px;display:flex;align-items:center;gap:14px;box-shadow:0 4px 6px -1px rgba(0,0,0,.15)}
-.header-logo{width:38px;height:38px;background:white;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#4338CA;font-size:16px;flex-shrink:0}
-.header-title{font-size:18px;font-weight:700}.header-sub{font-size:12px;opacity:.75}
-.steps{background:white;border-bottom:1px solid #E2E8F0;padding:0 28px;display:flex}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F1F5F9;color:#1E293B;min-height:100vh}
+.header{background:linear-gradient(135deg,#312E81 0%,#4338CA 100%);color:white;padding:16px 32px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 12px -2px rgba(67,56,202,.3)}
+.header-logo{width:40px;height:40px;background:white;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#4338CA;font-size:15px;flex-shrink:0;box-shadow:0 2px 4px rgba(0,0,0,.15)}
+.header-title{font-size:18px;font-weight:700;letter-spacing:-.01em}.header-sub{font-size:12px;opacity:.7;margin-top:1px}
+.steps{background:white;border-bottom:1px solid #E2E8F0;padding:0 32px;display:flex;box-shadow:0 1px 0 #E2E8F0}
 .step{display:flex;align-items:center;gap:8px;padding:14px 20px;border-bottom:3px solid transparent;cursor:pointer;color:#94A3B8;font-size:13px;font-weight:500;transition:all .2s}
 .step.active{color:#4338CA;border-bottom-color:#4338CA}.step.done{color:#10B981}
 .step-num{width:24px;height:24px;border-radius:50%;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
 .step.done .step-num{background:#10B981;border-color:#10B981;color:white}
 .step.active .step-num{background:#4338CA;border-color:#4338CA;color:white}
-.main{padding:28px;max-width:1480px;margin:0 auto}
-.section-title{font-size:20px;font-weight:700}.section-sub{font-size:13px;color:#64748B;margin-top:4px}
-.card{background:white;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);border:1px solid #E2E8F0}
-.card-body{padding:20px}.card-header{padding:13px 20px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between}
-.card-title{font-size:13px;font-weight:600}
+.main{padding:28px 32px;max-width:1500px;margin:0 auto}
+.section-title{font-size:22px;font-weight:800;color:#1E293B;letter-spacing:-.02em}
+.section-sub{font-size:13px;color:#64748B;margin-top:5px}
+.card{background:white;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid #E2E8F0}
+.card-body{padding:22px}.card-header{padding:16px 22px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:14px;font-weight:700;color:#1E293B;letter-spacing:-.01em}
 .upload-zone{border:2px dashed #C7D2FE;background:#F5F3FF;border-radius:12px;padding:44px;text-align:center;cursor:pointer;transition:all .2s}
 .upload-zone:hover,.upload-zone.drag-over{border-color:#4338CA;background:#EDE9FE}
-.upload-icon{font-size:44px;margin-bottom:14px}.upload-label{font-size:15px;font-weight:600;color:#4338CA;margin-bottom:6px}
+.upload-icon{width:48px;height:48px;margin:0 auto 14px;border:2px solid #C7D2FE;border-radius:10px;display:flex;align-items:center;justify-content:center;background:white;color:#4338CA;font-weight:700;font-size:13px;letter-spacing:.05em}
+.upload-label{font-size:15px;font-weight:600;color:#4338CA;margin-bottom:6px}
 .upload-hint{font-size:13px;color:#64748B}
-.file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:20px}
-.file-card{background:white;border:1px solid #E2E8F0;border-radius:10px;padding:13px;position:relative}
+.file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px;margin-top:22px}
+.file-card{background:white;border:1px solid #E2E8F0;border-radius:10px;padding:14px;position:relative}
 .file-card-header{display:flex;align-items:flex-start;gap:10px}
-.file-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
-.file-icon.xlsx{background:#D1FAE5}.file-icon.csv{background:#DBEAFE}
+.file-icon{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;letter-spacing:.05em;flex-shrink:0;color:#1E293B}
+.file-icon.xlsx{background:#D1FAE5;color:#065F46}.file-icon.csv{background:#DBEAFE;color:#1D4ED8}
 .file-name{font-size:12px;font-weight:600;word-break:break-word}
 .file-meta{font-size:11px;color:#64748B;margin-top:2px}
 .file-remove{position:absolute;top:10px;right:10px;background:none;border:none;color:#94A3B8;cursor:pointer;font-size:18px;padding:2px}
 .file-remove:hover{color:#EF4444}
-.file-type-badges{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap}
-.badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;cursor:pointer}
+.file-type-badges{display:flex;gap:5px;margin-top:10px;flex-wrap:wrap}
+.badge{font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;cursor:pointer;transition:opacity .15s}
 .badge-meeting{background:#DBEAFE;color:#1D4ED8}.badge-event{background:#FCE7F3;color:#BE185D}
 .badge-traveler{background:#D1FAE5;color:#065F46}.badge-space{background:#FEF3C7;color:#92400E}
 select,input[type=date]{border:1px solid #E2E8F0;border-radius:6px;padding:6px 10px;font-size:12px;color:#1E293B;background:white;width:100%;outline:none}
 select:focus,input:focus{border-color:#4338CA;box-shadow:0 0 0 3px rgba(67,56,202,.1)}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
 .btn-primary{background:#4338CA;color:white}.btn-primary:hover{background:#3730A3}
-.btn-secondary{background:white;color:#4338CA;border:1px solid #C7D2FE}.btn-secondary:hover{background:#F5F3FF}
+.btn-secondary{background:white;color:#4338CA;border:1px solid #4338CA}.btn-secondary:hover{background:#F5F3FF}
 .btn-sm{padding:5px 10px;font-size:11px}.btn:disabled{opacity:.45;cursor:not-allowed}
+.mapping-section{margin-bottom:28px}
 .mapping-table{width:100%;border-collapse:collapse}
 .mapping-table th{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#64748B;background:#F8FAFC;padding:9px 14px;text-align:left;border-bottom:1px solid #E2E8F0}
 .mapping-table td{padding:9px 14px;border-bottom:1px solid #F8FAFC;vertical-align:middle}
 .mapping-table tr:hover td{background:#F8FAFC}
 .col-preview{font-size:11px;color:#94A3B8;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .auto-badge{font-size:10px;background:#D1FAE5;color:#065F46;padding:2px 6px;border-radius:4px;font-weight:600}
-/* Dashboard layout */
-.dash-layout{display:grid;grid-template-columns:280px 1fr;gap:22px}
-.side-panel{background:white;border-radius:12px;border:1px solid #E2E8F0;padding:18px;height:fit-content;position:sticky;top:8px;max-height:calc(100vh - 100px);overflow-y:auto}
-.panel-section{margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid #F1F5F9}
-.panel-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
-.panel-title{font-size:12px;font-weight:700;color:#1E293B;margin-bottom:12px;display:flex;align-items:center;gap:6px}
-.filter-label{font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
-.filter-chips{display:flex;flex-wrap:wrap;gap:4px}
-.chip{font-size:11px;padding:3px 8px;border-radius:20px;border:1px solid #E2E8F0;cursor:pointer;transition:all .15s;color:#64748B;background:white}
-.chip.active{background:#4338CA;color:white;border-color:#4338CA}
-/* Capacity model sliders */
-.slider-row{margin-bottom:14px}
-.slider-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
-.slider-label{font-size:12px;font-weight:500;color:#374151}
-.slider-val{font-size:12px;font-weight:700;color:#4338CA;min-width:38px;text-align:right}
-input[type=range]{width:100%;height:5px;border-radius:3px;accent-color:#4338CA;cursor:pointer;border:none;box-shadow:none;padding:0}
-.slider-desc{font-size:10px;color:#94A3B8;margin-top:2px}
-/* Summary */
-.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-.sum-card{background:white;border-radius:12px;border:1px solid #E2E8F0;padding:16px;position:relative;overflow:hidden}
-.sum-label{font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em}
-.sum-value{font-size:28px;font-weight:800;color:#1E293B;margin:5px 0 2px;line-height:1}
-.sum-sub{font-size:11px;color:#94A3B8}.sum-icon{font-size:28px;position:absolute;right:14px;top:12px;opacity:.12}
-/* Charts */
-.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px}
-.chart-card{background:white;border-radius:12px;border:1px solid #E2E8F0;padding:16px}
-.chart-title{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px}
-.chart-container{position:relative;height:200px}
-/* Capacity heatmap */
-.cap-heatmap{overflow-x:auto}
-.cap-row{display:grid;align-items:center;gap:2px;margin-bottom:2px}
-.cap-cell{height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;cursor:default;transition:transform .1s;position:relative}
-.cap-cell:hover{transform:scale(1.15);z-index:10}
-.cap-0{background:#F1F5F9;color:#CBD5E1}       /* 0% */
-.cap-1{background:#D1FAE5;color:#065F46}        /* 1–25% */
-.cap-2{background:#FDE68A;color:#92400E}        /* 26–60% */
-.cap-3{background:#FCA5A5;color:#991B1B}        /* 61–85% */
-.cap-4{background:#DC2626;color:white}          /* 86–100% */
-.cap-5{background:#7F1D1D;color:white}          /* >100% OVERLOADED */
-.cap-legend{display:flex;gap:12px;margin-top:14px;align-items:center;flex-wrap:wrap}
-/* Upcoming table */
+.dashboard-layout{display:grid;grid-template-columns:240px 1fr;gap:24px}
+.filters-panel{background:white;border-radius:14px;border:1px solid #E2E8F0;padding:18px;height:fit-content;position:sticky;top:8px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.filters-title{font-size:12px;font-weight:700;margin-bottom:16px;text-transform:uppercase;letter-spacing:.06em;color:#64748B}
+.filter-group{margin-bottom:18px}.filter-label{font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.filter-chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid #E2E8F0;cursor:pointer;transition:all .15s;color:#64748B;background:white;line-height:1.4}
+.chip:hover{border-color:#C7D2FE;color:#4338CA;background:#F5F3FF}
+.chip.active{background:#4338CA;color:white;border-color:#4338CA;box-shadow:0 1px 3px rgba(67,56,202,.2)}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.summary-card{background:white;border-radius:12px;border:1px solid #E2E8F0;padding:20px 18px;position:relative;overflow:hidden}
+.summary-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:#4338CA;border-radius:12px 0 0 12px}
+.summary-card[data-tone="indigo"]::before{background:#4338CA}
+.summary-card[data-tone="teal"]::before{background:#06B6D4}
+.summary-card[data-tone="emerald"]::before{background:#10B981}
+.summary-card[data-tone="amber"]::before{background:#F59E0B}
+.summary-card[data-tone="rose"]::before{background:#E11D48}
+.summary-label{font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.06em}
+.summary-value{font-size:30px;font-weight:800;color:#1E293B;margin:8px 0 4px;line-height:1.05}
+.summary-sub{font-size:12px;color:#94A3B8;line-height:1.4}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+.chart-card{background:white;border-radius:12px;border:1px solid #E2E8F0;padding:18px}
+.chart-title{font-size:13px;font-weight:700;margin-bottom:14px}
+.chart-container{position:relative;height:210px}
 .upcoming-table{width:100%;border-collapse:collapse;font-size:12px}
-.upcoming-table th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748B;padding:8px 12px;text-align:left;background:#F8FAFC;border-bottom:2px solid #E2E8F0;position:sticky;top:0}
-.upcoming-table td{padding:9px 12px;border-bottom:1px solid #F8FAFC;color:#374151}
-.upcoming-table tbody tr:hover td{background:#F8FAFC}
+.upcoming-table th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748B;padding:10px 14px;text-align:left;background:#F8FAFC;border-bottom:2px solid #E2E8F0;position:sticky;top:0;white-space:nowrap}
+.upcoming-table td{padding:11px 14px;border-bottom:1px solid #F8FAFC;color:#374151;vertical-align:middle}
+.upcoming-table tbody tr:hover td{background:#FAFBFF}
 .status-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px}
-.s-confirmed{background:#D1FAE5;color:#065F46}.s-canceled{background:#FEE2E2;color:#991B1B}
-.s-pending{background:#FEF3C7;color:#92400E}.s-other{background:#F1F5F9;color:#475569}
-/* Effort bar */
-.effort-bar-wrap{background:#F1F5F9;border-radius:3px;height:6px;width:80px;display:inline-block;vertical-align:middle}
-.effort-bar{height:6px;border-radius:3px;transition:width .3s}
-/* Alert strip */
-.alert-strip{border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.alert-warn{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
-.alert-danger{background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5}
-/* Action bar */
-.action-bar{background:white;border-top:1px solid #E2E8F0;padding:13px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;bottom:0;z-index:100}
-.hidden{display:none!important}.text-muted{color:#64748B;font-size:12px}
-.empty-state{text-align:center;padding:44px;color:#94A3B8;font-size:13px}
-details>summary{cursor:pointer;list-style:none;font-size:12px;font-weight:600;color:#4338CA}
-details>summary::-webkit-details-marker{display:none}
-details[open]>summary{margin-bottom:12px}
+.status-confirmed{background:#D1FAE5;color:#065F46}.status-canceled{background:#FEE2E2;color:#991B1B}
+.status-pending{background:#FEF3C7;color:#92400E}.status-other{background:#F1F5F9;color:#475569}
+.heat-cell{height:26px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+.heat-0{background:#F1F5F9;color:#CBD5E1}.heat-1{background:#BFDBFE;color:#1E40AF}
+.heat-2{background:#60A5FA;color:white}.heat-3{background:#2563EB;color:white}.heat-4{background:#1D4ED8;color:white}
+.action-bar{background:white;border-top:1px solid #E2E8F0;padding:14px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;bottom:0;z-index:100}
+.hidden{display:none!important}.text-muted{color:#64748B;font-size:13px}
+.empty-state{text-align:center;padding:44px;color:#94A3B8}
+.dash-tabs{display:flex;gap:8px;margin-bottom:22px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.dash-tab{display:flex;align-items:center;gap:7px;padding:10px 18px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;background:white;color:#64748B;border:1px solid #E2E8F0;white-space:nowrap;transition:all .15s;outline:none;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.dash-tab:hover{color:#1E293B;border-color:#CBD5E1;background:#FAFAFA}
+.dash-tab:focus-visible{box-shadow:0 0 0 3px rgba(67,56,202,.18)}
+.dash-tab.active{background:#4338CA;color:white;border-color:#4338CA;box-shadow:0 2px 8px rgba(67,56,202,.25)}
+.dash-tab-count{font-size:11px;opacity:.8;font-weight:600;background:rgba(0,0,0,.07);padding:2px 8px;border-radius:10px}
+.dash-tab.active .dash-tab-count{background:rgba(255,255,255,.2)}
+.sortable-th{cursor:pointer;user-select:none}
+.sortable-th:hover{color:#1E293B}
+.sortable-th.sorted{color:#4338CA}
+@media (max-width:720px){.dash-tab{padding:8px 12px;font-size:12px}.dash-tab-count{display:none}}
 </style>
 </head>
 <body>
@@ -120,27 +431,28 @@ details[open]>summary{margin-bottom:12px}
 <div class="header">
   <div class="header-logo">PP</div>
   <div>
-    <div class="header-title">PulsePoint CM Forecast Tool</div>
-    <div class="header-sub">Upload · Map · Capacity Dashboard</div>
+    <div class="header-title">PulsePoint Community Manager Forecast</div>
+    <div class="header-sub">Upload files · Map columns · Validate &amp; clean · View dashboard <span id="ref-version-tag" style="opacity:.7;margin-left:8px"></span></div>
   </div>
 </div>
 
 <div class="steps">
   <div class="step active" id="step-tab-1"><div class="step-num">1</div> Upload Files</div>
   <div class="step" id="step-tab-2"><div class="step-num">2</div> Map Columns</div>
-  <div class="step" id="step-tab-3"><div class="step-num">3</div> Dashboard</div>
+  <div class="step" id="step-tab-3"><div class="step-num">3</div> Validate &amp; Clean</div>
+  <div class="step" id="step-tab-4"><div class="step-num">4</div> Dashboard</div>
 </div>
 
 <!-- STEP 1 -->
 <div id="step-1" class="main">
-  <div style="margin-bottom:20px">
+  <div style="margin-bottom:22px">
     <div class="section-title">Upload Your Data Files</div>
-    <div class="section-sub">Drag & drop any PulsePoint Excel or CSV files — mix locations, formats, and data types freely.</div>
+    <div class="section-sub">Upload Excel (.xlsx) or CSV files — any PulsePoint location, any format. Add as many as you have.</div>
   </div>
   <div class="card"><div class="card-body">
     <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
-      <div class="upload-icon">📂</div>
-      <div class="upload-label">Click to upload or drag & drop</div>
+      <div class="upload-icon">FILE</div>
+      <div class="upload-label">Click to upload or drag &amp; drop</div>
       <div class="upload-hint">Supports .xlsx and .csv · Multiple files welcome</div>
       <input type="file" id="file-input" multiple accept=".xlsx,.csv" style="display:none" onchange="handleFiles(this.files)">
     </div>
@@ -150,15 +462,20 @@ details[open]>summary{margin-bottom:12px}
 
 <!-- STEP 2 -->
 <div id="step-2" class="main hidden">
-  <div style="margin-bottom:20px">
+  <div style="margin-bottom:22px">
     <div class="section-title">Map Your Columns</div>
-    <div class="section-sub">Auto-detected mappings are pre-filled. Correct any that are off — fields marked * are required for capacity calculations.</div>
+    <div class="section-sub">We've auto-detected mappings — review and adjust. Required fields are marked with *</div>
   </div>
   <div id="mapping-container"></div>
 </div>
 
-<!-- STEP 3 -->
+<!-- STEP 3: Validate & Clean -->
 <div id="step-3" class="main hidden">
+  <div id="validate-content"></div>
+</div>
+
+<!-- STEP 4: Dashboard -->
+<div id="step-4" class="main hidden">
   <div id="dashboard-content"></div>
 </div>
 
@@ -173,21 +490,12 @@ details[open]>summary{margin-bottom:12px}
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────────
 const state = { step:1, files:[], records:[] };
-const filterState = { sites:new Set(['all']), cms:new Set(['all']), rtypes:new Set(['all']), statuses:new Set(['all']) };
+const filterState = { sites:new Set(['all']), regions:new Set(['all']), cms:new Set(['all']), rtypes:new Set(['all']), statuses:new Set(['all']) };
 let charts = {};
-
-// Capacity model — all factors are user-adjustable via sliders
-const cap = {
-  baseline: 25,         // % of day used just by existing (site walks, supplies, tours, etc.)
-  maxPts: 100,          // effort points that = 100% of remaining capacity
-  perMeeting: 10,       // base effort per meeting
-  perAttendee: 0.3,     // effort per attendee
-  cateringBonus: 12,    // bonus if catering required
-  externalBonus: 8,     // bonus if external/VIP guests
-  eventMult: 3.0,       // event effort multiplier vs meeting
-  travelerPts: 4,       // effort per traveler
-  shippingBonus: 6,     // bonus if items being shipped to site
-};
+let heatmapMode = 'count'; // 'count' | 'pct_primary_seats' | 'pct_expected_usage' | 'vs_tt_baseline'
+let activeTab = 'overview';
+let modelControlsOpen = false;
+const tableSort = { workspace:{col:0,dir:1}, meetings:{col:0,dir:1}, events:{col:0,dir:1}, wsDaily:{col:0,dir:1}, vipTravelers:{col:2,dir:1}, riskRadar:{col:1,dir:1} };
 
 const STANDARD_FIELDS = [
   {key:'site',label:'Site / Location',required:true},
@@ -196,31 +504,38 @@ const STANDARD_FIELDS = [
   {key:'event_name',label:'Event / Meeting Name',required:true},
   {key:'status',label:'Status',required:false},
   {key:'attendees',label:'# Attendees',required:false},
+  {key:'vip',label:'VIP / VIP Attendee',required:false},
+  {key:'budget',label:'Budget / Event Spend',required:false},
   {key:'cm_captain',label:'CM Captain / Lead',required:false},
   {key:'time',label:'Time',required:false},
   {key:'room',label:'Room / Space',required:false},
   {key:'event_type',label:'Event Type',required:false},
   {key:'catering',label:'Catering / F&B',required:false},
-  {key:'vip',label:'VIP / SLT / External Guests',required:false},
-  {key:'shipping',label:'Items Shipped to Site',required:false},
   {key:'notes',label:'Notes',required:false},
+  {key:'why',label:'The Why / Purpose',required:false},
 ];
 
 const FIELD_ALIASES = {
-  site:['site','location','pulse point location','building_name','location_name','city'],
-  date:['date','start date','event date','start_time','arrival date','check-in date','meeting start date','helper date'],
-  end_date:['end date','meeting end date','end_time'],
-  event_name:['event name','meeting name','meeting or event name','amenity_name','display_name'],
+  site:['site','location','pulse point location','building_name','location_name','location name','city','location_id','location id','spaces_location_id','spaces location id'],
+  // 'helper date' removed — it stole priority from 'Meeting Start Date' in Atlanta file
+  date:['date','start date','event date','start_time','arrival date','check-in date','meeting start date'],
+  end_date:['end date','meeting end date','end_time','checkout time'],
+  event_name:['event name','meeting name','meeting or event name','pref_display_name','preferred display name','pref display name','reserved by','reservation name','traveler name','traveler first name','first name','attendee name','guest name'],
+  // 'valid' removed — it stole priority from the actual 'Status' column in meeting reports (Valid is a boolean flag, not a status)
   status:['status','mng approval status'],
-  attendees:['# guest','number of attendees','# attendees','num attendees','number of guests','reservation_duration'],
-  cm_captain:['cm captain','cm event lead','event team member','event lead'],
-  time:['time','event time','meeting time'],
-  room:['room','requested meeting room','event location','amenity_name'],
-  event_type:['event type','amenity_type','type'],
-  catering:['catering info','catering','f&b','fooda information','food delivery','will you have a catering'],
-  vip:['vip','slt','are there slt','external guests','will you have external','guest wi-fi','visitor parking','exec'],
-  shipping:['items being shipped','notes on items being shipped','are items being shipped'],
-  notes:['notes','meeting notes','additional information','cm notes'],
+  // 'reservation_duration' removed — it is a time duration, not a headcount; caused false positives in Space Report and Planning Grid
+  attendees:['# guest','number of attendees','# attendees','num attendees','number of guests','headcount','expected attendees','attendees'],
+  // added 'vip/meeting host' and 'vp/meeting host' for Mason and similar files
+  vip:['vip','vips','vip attendee','vip attendees','vip name','vip names','executive','exec attendee','exec attending','principal','principals','vip/meeting host','vp/meeting host'],
+  budget:['budget','event budget','event spend','total spend','estimated spend','estimated cost','total cost','event cost','planned spend','approved budget'],
+  cm_captain:['cm captain','cm event lead','event team member','event lead','cm lead','cm owner'],
+  time:['time','event time','meeting time','start time'],
+  room:['room','requested meeting room','event location','amenity_name','amenity name','workspace','desk','seat'],
+  event_type:['event type','amenity_type','type','event category'],
+  catering:['catering info','catering','f&b','fooda information','food delivery'],
+  notes:['notes','meeting notes','additional information','cm notes','description'],
+  // 'The "Why"' column in the Planning Grid — event purpose/rationale
+  why:['the "why"', "the 'why'", 'the why', 'why', 'purpose', 'event purpose', 'business purpose', 'business reason'],
 };
 
 const RECORD_TYPES = [
@@ -230,646 +545,1943 @@ const RECORD_TYPES = [
   {value:'space',label:'Space/Desk',badge:'badge-space'},
 ];
 
-const COLORS=['#4338CA','#06B6D4','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16','#F43F5E'];
+// ── REFERENCE LAYER ────────────────────────────────────────────────────────
+// Canonical site / CM / RL data baked from reference.xlsx into window.CM_REFERENCE.
+// Powers: site name auto-resolve, row enrichment, capacity-normalized heatmap,
+// pre-populated filter chips, anomaly flags. See scripts/bake-reference.mjs.
+const REF = () => window.CM_REFERENCE;
+
+function resolveSiteValue(raw) {
+  const ref = REF();
+  if (!ref || raw == null) return null;
+  const v = String(raw).trim();
+  if (!v) return null;
+  const vl = v.toLowerCase();
+  const vu = v.toUpperCase();
+  if (ref.bySpacesLocationId && ref.bySpacesLocationId[v]) return { site: ref.bySpacesLocationId[v], score: 100, via: 'spacesLocationId' };
+  if (ref.bySiteName[vl]) return { site: ref.bySiteName[vl], score: 100, via: 'siteName' };
+  if (ref.byLocationUpper[vu]) return { site: ref.byLocationUpper[vu], score: 100, via: 'location' };
+  if (ref.byBuildingRefId[v]) return { site: ref.byBuildingRefId[v], score: 100, via: 'buildingRefId' };
+  // substring either direction against site name
+  for (const s of ref.sites) {
+    const sn = s.siteName.toLowerCase();
+    if (sn.includes(vl) || vl.includes(sn)) return { site: s, score: 80, via: 'substring' };
+  }
+  // character prefix overlap (catches "Indy" → "Indianapolis", "Penn" → "NY Penn1")
+  // ≥3 leading chars AND prefix covers ≥50% of the shorter string.
+  if (vl.length >= 3) {
+    for (const s of ref.sites) {
+      const sn = s.siteName.toLowerCase();
+      if (sn.length < 3) continue;
+      let cp=0; while (cp<sn.length && cp<vl.length && sn[cp]===vl[cp]) cp++;
+      if (cp >= 3 && cp >= Math.min(sn.length, vl.length) * 0.5) return { site: s, score: 60, via: 'prefix' };
+    }
+  }
+  // token overlap against location and site name (catches "New York Penn Plaza" → "NY Penn1")
+  const vt = vl.split(/[\s,]+/).filter(t=>t.length>2);
+  if (vt.length) {
+    for (const s of ref.sites) {
+      const lt = (s.location||'').toLowerCase().split(/[\s,]+/).filter(t=>t.length>2);
+      const st = s.siteName.toLowerCase().split(/[\s,]+/).filter(t=>t.length>2);
+      const overlap = vt.filter(t => lt.includes(t) || st.includes(t)).length;
+      if (overlap > 0 && overlap >= Math.ceil(vt.length / 2)) return { site: s, score: 40, via: 'token' };
+    }
+  }
+  return null;
+}
+
+// Per-file unique-value resolution map; user can override via the mapping UI.
+function buildSiteResolution(f) {
+  const map = new Map();
+  const ref = REF(); if (!ref) { f._siteResolution = map; return map; }
+  const siteCol = Object.keys(f.mappings || {}).find(c => f.mappings[c] === 'site');
+  if (!siteCol) { f._siteResolution = map; return map; }
+  const idx = f.columns.indexOf(siteCol); if (idx === -1) { f._siteResolution = map; return map; }
+  f.rows.slice(1).forEach(row => {
+    const v = row[idx]; if (v == null || v === '') return;
+    const key = String(v).trim(); if (!key || map.has(key)) return;
+    const r = resolveSiteValue(key);
+    map.set(key, {
+      site: r ? r.site : null,
+      score: r ? r.score : 0,
+      via: r ? r.via : 'none',
+      overrideTo: r ? r.site.siteName : '',
+    });
+  });
+  f._siteResolution = map;
+  return map;
+}
+
+function getAllSiteNames() {
+  const fromRef = REF() ? REF().sites.map(s => s.siteName) : [];
+  const fromData = state.records.map(r => r._canonicalSite || r.site).filter(Boolean);
+  return [...new Set([...fromRef, ...fromData])].sort();
+}
+function getAllRegionalLeaders() {
+  const fromRef = REF() ? REF().sites.map(s => s.regionalLeader).filter(Boolean) : [];
+  const fromData = state.records.map(r => r._regionalLeader).filter(Boolean);
+  return [...new Set([...fromRef, ...fromData])].sort();
+}
+function getAllCMs() {
+  const fromRef = REF() ? REF().sites.flatMap(s => s.assignedCMs || []) : [];
+  const fromData = state.records.map(r => r.cm_captain).filter(Boolean);
+  return [...new Set([...fromRef, ...fromData])].sort();
+}
 
 // ── NAVIGATION ─────────────────────────────────────────────────────────────
 function goStep(n) {
   document.getElementById(`step-${state.step}`).classList.add('hidden');
-  const prev=document.getElementById(`step-tab-${state.step}`);
-  prev.classList.remove('active');
-  if(n>state.step) prev.classList.add('done');
-  state.step=n;
+  const prevTab = document.getElementById(`step-tab-${state.step}`);
+  prevTab.classList.remove('active');
+  if (n > state.step) prevTab.classList.add('done');
+  state.step = n;
   document.getElementById(`step-${n}`).classList.remove('hidden');
-  const cur=document.getElementById(`step-tab-${n}`);
-  cur.classList.add('active'); cur.classList.remove('done');
-  updateAB();
-  if(n===2) renderMappings();
-  if(n===3){applyMappings();renderDashboard();}
+  const newTab = document.getElementById(`step-tab-${n}`);
+  newTab.classList.add('active'); newTab.classList.remove('done');
+  updateActionBar();
+  if (n===2) renderMappings();
+  if (n===3) { applyMappings(); renderValidationStep(); }
+  if (n===4) { applyValEdits(); renderDashboard(); }
 }
-function goNext(){if(state.step<3)goStep(state.step+1);}
-function goBack(){if(state.step>1){document.getElementById(`step-tab-${state.step}`).classList.remove('done');goStep(state.step-1);}}
-function updateAB(){
-  const bn=document.getElementById('btn-next'),bb=document.getElementById('btn-back'),al=document.getElementById('action-left');
-  bb.classList.toggle('hidden',state.step===1);
-  bn.classList.remove('hidden');
-  if(state.step===3){bn.classList.add('hidden');al.textContent=`${state.records.length.toLocaleString()} records loaded`;return;}
-  if(state.step===1){bn.textContent='Next: Map Columns →';bn.disabled=state.files.length===0;al.textContent=state.files.length?`${state.files.length} file(s) ready`:'Upload at least one file to continue';}
-  if(state.step===2){bn.textContent='Build Dashboard →';bn.disabled=false;al.textContent='Review mappings, then build the dashboard';}
+function goNext() { if(state.step<4) goStep(state.step+1); }
+function goBack() { if(state.step>1) { document.getElementById(`step-tab-${state.step}`).classList.remove('done'); goStep(state.step-1); } }
+function updateActionBar() {
+  const btnNext=document.getElementById('btn-next'), btnBack=document.getElementById('btn-back'), al=document.getElementById('action-left');
+  btnBack.classList.toggle('hidden', state.step===1);
+  btnNext.classList.remove('hidden');
+  if(state.step===4){ btnNext.classList.add('hidden'); al.textContent=`${state.records.length.toLocaleString()} records loaded`; return; }
+  if(state.step===1){ btnNext.textContent='Next: Map Columns →'; btnNext.disabled=state.files.length===0; al.textContent=state.files.length?`${state.files.length} file(s) ready`:'Upload at least one file to continue'; }
+  if(state.step===2){ btnNext.textContent='Next: Validate & Clean →'; btnNext.disabled=false; al.textContent='Review mappings then validate records'; }
+  if(state.step===3){ btnNext.textContent='Build Dashboard →'; btnNext.disabled=false; al.textContent='Review and fix flagged records, then build dashboard'; }
 }
 
 // ── FILE HANDLING ──────────────────────────────────────────────────────────
-const uz=document.getElementById('upload-zone');
-uz.addEventListener('dragover',e=>{e.preventDefault();uz.classList.add('drag-over');});
-uz.addEventListener('dragleave',()=>uz.classList.remove('drag-over'));
-uz.addEventListener('drop',e=>{e.preventDefault();uz.classList.remove('drag-over');handleFiles(e.dataTransfer.files);});
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e=>{e.preventDefault();uploadZone.classList.add('drag-over');});
+uploadZone.addEventListener('dragleave', ()=>uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e=>{e.preventDefault();uploadZone.classList.remove('drag-over');handleFiles(e.dataTransfer.files);});
 
-function handleFiles(fl){
-  Array.from(fl).forEach(file=>{
-    if(!file.name.match(/\.(xlsx|csv)$/i)) return;
-    if(state.files.find(f=>f.name===file.name)) return;
-    const r=new FileReader();
-    r.onload=e=>{
-      try{
-        const fd=file.name.endsWith('.csv')?parseCSV(file.name,e.target.result):parseXLSX(file.name,e.target.result);
-        state.files.push(fd);renderFileList();updateAB();
-      }catch(err){alert(`Could not parse ${file.name}: ${err.message}`);}
+function handleFiles(fileList) {
+  Array.from(fileList).forEach(file => {
+    if (!file.name.match(/\.(xlsx|csv)$/i)) return;
+    if (state.files.find(f=>f.name===file.name)) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const fd = file.name.endsWith('.csv') ? parseCSV(file.name, e.target.result) : parseXLSX(file.name, e.target.result);
+        state.files.push(fd);
+        renderFileList();
+        updateActionBar();
+      } catch(err) { alert(`Could not parse ${file.name}: ${err.message}`); }
     };
-    file.name.endsWith('.csv')?r.readAsText(file):r.readAsArrayBuffer(file);
+    file.name.endsWith('.csv') ? reader.readAsText(file) : reader.readAsArrayBuffer(file);
   });
 }
 
-function parseXLSX(name,buf){
-  const wb=XLSX.read(buf,{type:'array',cellDates:true});
-  const sheets=wb.SheetNames.filter(s=>!s.toLowerCase().includes('comment')&&!s.toLowerCase().includes('summary'));
-  const sel=sheets[0]||wb.SheetNames[0];
-  const rows=XLSX.utils.sheet_to_json(wb.Sheets[sel],{header:1,defval:null,raw:false});
-  const headers=(rows[0]||[]).map(h=>h?String(h).trim():'');
-  const dataRows=rows.slice(1).filter(r=>r.some(c=>c!==null&&c!==''));
-  const nl=name.toLowerCase();
-  const rt=nl.includes('traveler')?'traveler':nl.includes('space')||nl.includes('reserve')?'space':nl.includes('event')||nl.includes('planning')?'event':'meeting';
-  return {name,type:'xlsx',sheets,selectedSheet:sel,wb,columns:headers,rows:[headers,...dataRows],mappings:autoMap(headers),recordType:rt,rowCount:dataRows.length};
+function parseXLSX(name, buffer) {
+  const wb = XLSX.read(buffer, {type:'array', cellDates:true});
+  const sheets = wb.SheetNames.filter(s=>!s.toLowerCase().includes('comment')&&!s.toLowerCase().includes('summary'));
+  const sel = sheets[0] || wb.SheetNames[0];
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sel], {header:1, defval:null, raw:false});
+  const headers = (rows[0]||[]).map(h=>h?String(h).trim():'');
+  const dataRows = rows.slice(1).filter(r=>r.some(c=>c!==null&&c!==''));
+  const n = name.toLowerCase();
+  const recordType = n.includes('traveler')?'traveler':n.includes('space')||n.includes('reserve')?'space':n.includes('event')||n.includes('planning')?'event':'meeting';
+  return {name,type:'xlsx',sheets,selectedSheet:sel,wb,columns:headers,rows:[headers,...dataRows],mappings:autoMap(headers),recordType,rowCount:dataRows.length};
 }
 
-function parseCSV(name,text){
-  const lines=text.trim().split('\n');
-  const headers=lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
-  const rows=lines.slice(1).map(line=>{
-    const cells=[];let cur='',inQ=false;
-    for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cells.push(cur.trim());cur='';}else cur+=ch;}
-    cells.push(cur.trim());return cells;
+function parseCSV(name, text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+  const rows = lines.slice(1).map(line=>{
+    const cells=[]; let cur='',inQ=false;
+    for(const ch of line){ if(ch==='"')inQ=!inQ; else if(ch===','&&!inQ){cells.push(cur.trim());cur='';}else cur+=ch; }
+    cells.push(cur.trim()); return cells;
   }).filter(r=>r.some(c=>c!==''));
-  const rt=name.toLowerCase().includes('traveler')?'traveler':'meeting';
-  return {name,type:'csv',sheets:[name],selectedSheet:name,columns:headers,rows:[headers,...rows],mappings:autoMap(headers),recordType:rt,rowCount:rows.length};
+  const recordType = name.toLowerCase().includes('traveler')?'traveler':'meeting';
+  return {name,type:'csv',sheets:[name],selectedSheet:name,columns:headers,rows:[headers,...rows],mappings:autoMap(headers),recordType,rowCount:rows.length};
 }
 
-function autoMap(cols){
-  const mappings={},used=new Set(),pairs=[];
-  cols.forEach(col=>{
+// Aliases in this set score higher than other exact matches for the same field,
+// so they win ties. Use sparingly — only when one alias is the canonical key
+// (e.g. LOCATION_ID is the PulsePoint join key, not BUILDING_NAME).
+const PREFERRED_ALIASES = {
+  site: new Set(['location_id','location id','spaces_location_id','spaces location id']),
+  // Travelers files have both "Check-In Date" and "Arrival Date"; Arrival Date is the real one.
+  date: new Set(['arrival date']),
+  // 'Catering Info' is a text/detail column; 'Food Delivery' is often a boolean — prefer the richer column.
+  catering: new Set(['catering info']),
+  // 'CM Captain' and 'CM Event Lead' are explicit CM role columns; beat generic 'Event Team Member' / 'Event Lead'.
+  cm_captain: new Set(['cm captain', 'cm event lead']),
+  // 'Total Est Event Budget' is the pre-event planned budget — prefer it over 'Actual Event Spend'.
+  budget: new Set(['total est event budget', 'total estimated budget', 'estimated budget', 'planned budget']),
+};
+
+function autoMap(columns) {
+  const mappings={}, usedFields=new Set();
+  const pairs=[];
+  columns.forEach(col=>{
     if(!col) return;
     const cl=col.toLowerCase().trim();
     Object.entries(FIELD_ALIASES).forEach(([field,aliases])=>{
-      let sc=0;
-      aliases.forEach(a=>{if(cl===a)sc=Math.max(sc,10);else if(cl.includes(a))sc=Math.max(sc,5);else if(a.includes(cl)&&cl.length>3)sc=Math.max(sc,3);});
-      if(sc>0)pairs.push({col,field,sc});
+      let score=0;
+      const preferred = PREFERRED_ALIASES[field];
+      aliases.forEach(a=>{
+        if(cl===a) score=Math.max(score, preferred && preferred.has(a) ? 20 : 10);
+        else if(cl.includes(a)) score=Math.max(score,5);
+        else if(a.includes(cl)&&cl.length>3) score=Math.max(score,3);
+      });
+      if(score>0) pairs.push({col,field,score});
     });
   });
-  pairs.sort((a,b)=>b.sc-a.sc);
-  pairs.forEach(({col,field})=>{if(!mappings[col]&&!used.has(field)){mappings[col]=field;used.add(field);}});
+  pairs.sort((a,b)=>b.score-a.score);
+  pairs.forEach(({col,field})=>{ if(!mappings[col]&&!usedFields.has(field)){mappings[col]=field;usedFields.add(field);} });
   return mappings;
 }
 
-function removeFile(name){state.files=state.files.filter(f=>f.name!==name);renderFileList();updateAB();}
+function removeFile(name) { state.files=state.files.filter(f=>f.name!==name); renderFileList(); updateActionBar(); }
 
-function renderFileList(){
-  document.getElementById('file-list').innerHTML=state.files.map(f=>`
-    <div class="file-card">
-      <button class="file-remove" onclick="removeFile('${esc(f.name)}')">×</button>
+function renderFileList() {
+  document.getElementById('file-list').innerHTML = state.files.map(f=>{
+    const nameJs = jsString(f.name);
+    return `<div class="file-card">
+      <button class="file-remove" onclick="removeFile('${nameJs}')">×</button>
       <div class="file-card-header">
-        <div class="file-icon ${f.type}">${f.type==='csv'?'📊':'📗'}</div>
-        <div><div class="file-name">${f.name}</div><div class="file-meta">${f.rowCount.toLocaleString()} rows · ${f.columns.length} cols</div></div>
+        <div class="file-icon ${f.type}">${f.type==='csv'?'CSV':'XLSX'}</div>
+        <div><div class="file-name">${escapeHtml(f.name)}</div><div class="file-meta">${f.rowCount.toLocaleString()} rows · ${f.columns.length} cols</div></div>
       </div>
-      ${f.sheets.length>1?`<div style="margin-top:9px"><select onchange="changeSheet('${esc(f.name)}',this.value)">${f.sheets.map(s=>`<option ${s===f.selectedSheet?'selected':''}>${s}</option>`).join('')}</select></div>`:''}
-      <div class="file-type-badges">${RECORD_TYPES.map(r=>`<span class="badge ${r.badge}" style="${f.recordType!==r.value?'opacity:.3':''}" onclick="setRT('${esc(f.name)}','${r.value}')">${r.label}</span>`).join('')}</div>
-    </div>`).join('');
-}
-
-function changeSheet(name,sheet){
-  const f=state.files.find(f=>f.name===name);if(!f||!f.wb)return;
-  f.selectedSheet=sheet;
-  const rows=XLSX.utils.sheet_to_json(f.wb.Sheets[sheet],{header:1,defval:null,raw:false});
-  const headers=(rows[0]||[]).map(h=>h?String(h).trim():'');
-  const data=rows.slice(1).filter(r=>r.some(c=>c!==null&&c!==''));
-  f.columns=headers;f.rows=[headers,...data];f.rowCount=data.length;f.mappings=autoMap(headers);
-  renderFileList();
-}
-function setRT(name,type){const f=state.files.find(f=>f.name===name);if(f){f.recordType=type;renderFileList();}}
-function esc(s){return String(s).replace(/'/g,"\\'");}
-
-// ── MAPPING ────────────────────────────────────────────────────────────────
-function renderMappings(){
-  document.getElementById('mapping-container').innerHTML=state.files.map((f,fi)=>{
-    const ti=RECORD_TYPES.find(r=>r.value===f.recordType)||RECORD_TYPES[0];
-    const preview=f.rows[1]||[];
-    return `<div class="card" style="margin-bottom:22px">
-      <div class="card-header">
-        <div>
-          <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px">
-            ${f.name} <span class="badge ${ti.badge}">${ti.label}</span>
-            <span class="text-muted">${f.rowCount.toLocaleString()} rows</span>
-          </div>
-          <div style="font-size:11px;color:#64748B;margin-top:3px">Review auto-detected mappings · fields marked * are used in capacity calculations</div>
-        </div>
-        <button class="btn btn-sm btn-secondary" onclick="autoMapFile(${fi})">🔄 Re-auto-map</button>
-      </div>
-      <div class="card-body" style="padding:0;overflow-x:auto">
-        <table class="mapping-table">
-          <thead><tr><th>Column in File</th><th>Sample Value</th><th>Maps To Standard Field</th><th></th></tr></thead>
-          <tbody>${f.columns.map((col,ci)=>{
-            const sample=preview[ci]!=null?String(preview[ci]).substring(0,55):'—';
-            const mapped=f.mappings[col];
-            return `<tr>
-              <td><div style="font-weight:600;font-size:12px">${col||'(empty)'}</div></td>
-              <td><div class="col-preview">${sample}</div></td>
-              <td><select onchange="updateMapping(${fi},'${col.replace(/'/g,"\\'").replace(/"/g,'&quot;')}',this.value)">
-                <option value="">— Ignore —</option>
-                ${STANDARD_FIELDS.map(sf=>`<option value="${sf.key}"${mapped===sf.key?' selected':''}>${sf.label}${sf.required?' *':''}</option>`).join('')}
-              </select></td>
-              <td>${mapped?'<span class="auto-badge">AUTO</span>':'<span style="font-size:10px;color:#E2E8F0">–</span>'}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>
-      </div>
+      ${f.sheets.length>1?`<div style="margin-top:10px"><select onchange="changeSheet('${nameJs}',this.value)">${f.sheets.map(s=>`<option ${s===f.selectedSheet?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select></div>`:''}
+      <div class="file-type-badges">${RECORD_TYPES.map(r=>`<span class="badge ${r.badge}" style="${f.recordType!==r.value?'opacity:.35':''}" onclick="setRecordType('${nameJs}','${r.value}')">${escapeHtml(r.label)}</span>`).join('')}</div>
     </div>`;
   }).join('');
 }
 
-function updateMapping(fi,col,field){
-  const f=state.files[fi];if(!f)return;
-  if(field){Object.keys(f.mappings).forEach(c=>{if(f.mappings[c]===field&&c!==col)delete f.mappings[c];});f.mappings[col]=field;}
+// JS-string escape for values embedded inside inline onclick="..." handlers.
+// (escapeHtml handles the attribute layer; jsString protects the JS-string layer.)
+function jsString(s) {
+  return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function changeSheet(name,sheet) {
+  const f=state.files.find(f=>f.name===name); if(!f||!f.wb) return;
+  f.selectedSheet=sheet;
+  const rows=XLSX.utils.sheet_to_json(f.wb.Sheets[sheet],{header:1,defval:null,raw:false});
+  const headers=(rows[0]||[]).map(h=>h?String(h).trim():'');
+  const dataRows=rows.slice(1).filter(r=>r.some(c=>c!==null&&c!==''));
+  f.columns=headers; f.rows=[headers,...dataRows]; f.rowCount=dataRows.length; f.mappings=autoMap(headers);
+  renderFileList();
+}
+
+function setRecordType(name,type) { const f=state.files.find(f=>f.name===name); if(f){f.recordType=type; renderFileList();} }
+
+// ── MAPPING ────────────────────────────────────────────────────────────────
+function renderMappings() {
+  document.getElementById('mapping-container').innerHTML = state.files.map((f,fi)=>{
+    const typeInfo=RECORD_TYPES.find(r=>r.value===f.recordType)||RECORD_TYPES[0];
+    const preview=f.rows[1]||[];
+    return `<div class="card mapping-section">
+      <div class="card-header">
+        <div>
+          <div style="font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px">
+            ${escapeHtml(f.name)} <span class="badge ${typeInfo.badge}">${escapeHtml(typeInfo.label)}</span>
+            <span class="text-muted" style="font-weight:400">${f.rowCount.toLocaleString()} rows</span>
+          </div>
+          <div style="font-size:12px;color:#64748B;margin-top:3px">Map each column to a standard field · ignore anything not needed</div>
+        </div>
+        <button class="btn btn-sm btn-secondary" onclick="autoMapFile(${fi})">Re-auto-map</button>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="mapping-table">
+          <thead><tr><th>Column in File</th><th>Sample Value</th><th>Maps To</th><th></th></tr></thead>
+          <tbody>${f.columns.map((col,ci)=>{
+            const sample=preview[ci]!=null?String(preview[ci]).substring(0,60):'—';
+            const mapped=f.mappings[col];
+            return `<tr>
+              <td><div style="font-weight:600;font-size:12px">${escapeHtml(col||'(empty)')}</div></td>
+              <td><div class="col-preview">${escapeHtml(sample)}</div></td>
+              <td><select onchange="updateMapping(${fi},'${jsString(col)}',this.value)">
+                <option value="">— Ignore —</option>
+                ${STANDARD_FIELDS.map(sf=>`<option value="${sf.key}"${mapped===sf.key?' selected':''}>${escapeHtml(sf.label)}${sf.required?' *':''}</option>`).join('')}
+              </select></td>
+              <td>${mapped?'<span class="auto-badge">AUTO</span>':'<span style="font-size:10px;color:#CBD5E1">–</span>'}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+      ${renderSiteResolutionPanel(f, fi)}
+    </div>`;
+  }).join('');
+}
+
+// Site auto-resolve preview + anomaly callout (only when a site column is mapped & reference is loaded).
+function renderSiteResolutionPanel(f, fi) {
+  if (!REF()) return '';
+  const siteCol = Object.keys(f.mappings || {}).find(c => f.mappings[c] === 'site');
+  if (!siteCol) return '';
+  buildSiteResolution(f);
+  const entries = [...(f._siteResolution || new Map()).entries()];
+  if (!entries.length) return '';
+  const matched = entries.filter(([,v]) => v.site && v.overrideTo);
+  const unmatched = entries.filter(([,v]) => !v.overrideTo);
+  const refSiteOptions = REF().sites.map(s => s.siteName);
+  const optsHtml = (sel) => `<option value="">— Leave as-is —</option>` +
+    refSiteOptions.map(n => `<option value="${n.replace(/"/g,'&quot;')}"${sel===n?' selected':''}>${n}</option>`).join('');
+  const fileKey = f.name.replace(/'/g,"\\'");
+  const matchedPreview = matched.slice(0,6).map(([raw,r]) =>
+    `<span style="font-size:11px;color:#475569"><b>${escapeHtml(raw)}</b> → ${escapeHtml(r.overrideTo)}${r.via!=='siteName'&&r.via!=='location'&&r.via!=='buildingRefId'?` <span style="color:#94A3B8">(${r.via})</span>`:''}</span>`
+  ).join(' · ');
+  const matchedMore = matched.length>6 ? `<span style="color:#94A3B8;font-size:11px">  +${matched.length-6} more</span>` : '';
+  return `<div style="padding:14px 22px;border-top:1px solid #F1F5F9;background:#F8FAFC">
+    <div style="font-size:12px;font-weight:700;color:#1E293B;margin-bottom:8px">Site auto-resolution against master reference</div>
+    <div style="font-size:12px;color:#475569;margin-bottom:${unmatched.length?'12px':'0'}">
+      Matched <b>${matched.length}</b> of ${entries.length} unique values${matched.length?': ':''}${matchedPreview}${matchedMore}
+    </div>
+    ${unmatched.length ? `<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px">
+      <div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:8px">${unmatched.length} unmatched value${unmatched.length>1?'s':''} — pick a master location or leave as-is</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${unmatched.map(([raw,r]) => `<div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;font-weight:600;color:#1E293B;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(raw)}">${escapeHtml(raw)}</span>
+          <select style="flex:1;font-size:11px" onchange="overrideSiteResolution('${fileKey}','${raw.replace(/'/g,"\\'").replace(/"/g,'&quot;')}',this.value)">
+            ${optsHtml(r.overrideTo)}
+          </select>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+  </div>`;
+}
+
+function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function overrideSiteResolution(fileName, raw, canonicalSiteName) {
+  const f = state.files.find(x => x.name === fileName); if (!f || !f._siteResolution) return;
+  const r = f._siteResolution.get(raw); if (!r) return;
+  if (canonicalSiteName) {
+    const target = REF().bySiteName[canonicalSiteName.toLowerCase()];
+    r.site = target || null;
+    r.overrideTo = target ? target.siteName : '';
+    r.via = 'manual';
+    r.score = target ? 100 : 0;
+  } else {
+    r.site = null; r.overrideTo = ''; r.via = 'none'; r.score = 0;
+  }
+  f._siteResolution.set(raw, r);
+  renderMappings(); // re-render to reflect counts
+}
+
+function updateMapping(fi, col, field) {
+  const f=state.files[fi]; if(!f) return;
+  if(field) { Object.keys(f.mappings).forEach(c=>{if(f.mappings[c]===field&&c!==col)delete f.mappings[c];}); f.mappings[col]=field; }
   else delete f.mappings[col];
 }
-function autoMapFile(fi){const f=state.files[fi];if(f){f.mappings=autoMap(f.columns);renderMappings();}}
+function autoMapFile(fi) { const f=state.files[fi]; if(f){f.mappings=autoMap(f.columns); renderMappings();} }
 
 // ── NORMALIZE ──────────────────────────────────────────────────────────────
-function fmtDate(val){
-  if(!val)return'';
+function fmtDate(val) {
+  if(!val) return '';
   let d;
   if(typeof val==='string'){
-    const m=val.match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return`${m[1]}-${m[2]}-${m[3]}`;
+    const m=val.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return `${m[1]}-${m[2]}-${m[3]}`;
     const m2=val.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-    if(m2){const y=m2[3].length===2?2000+parseInt(m2[3]):parseInt(m2[3]);d=new Date(y,parseInt(m2[1])-1,parseInt(m2[2]));}
+    if(m2){ const y=m2[3].length===2?2000+parseInt(m2[3]):parseInt(m2[3]); d=new Date(y,parseInt(m2[1])-1,parseInt(m2[2])); }
     else d=new Date(val);
-  }else if(val instanceof Date)d=val; else return'';
-  if(!d||isNaN(d))return'';
-  return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  } else if(val instanceof Date) d=val;
+  else return '';
+  if(!d||isNaN(d)) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-function applyMappings(){
+function applyMappings() {
   state.records=[];
+  state.filteredOutCount = 0;
+  state.filteredOutBySource = {};
   state.files.forEach(f=>{
-    const{rows,columns,mappings,name,recordType}=f;
-    const fi2i={};
-    Object.entries(mappings||{}).forEach(([col,field])=>{if(field){const i=columns.indexOf(col);if(i!==-1)fi2i[field]=i;}});
+    const {rows,columns,mappings,name,recordType}=f;
+    const fi2idx={};
+    Object.entries(mappings||{}).forEach(([col,field])=>{ if(field){const i=columns.indexOf(col);if(i!==-1)fi2idx[field]=i;} });
+    // ensure site resolution map is current for this file
+    if (REF() && fi2idx.site !== undefined) buildSiteResolution(f);
+    const resolution = f._siteResolution || new Map();
+    // Detect first/last name pair so we can render "First Last" as a single name.
+    let firstNameIdx=null, lastNameIdx=null;
+    columns.forEach((c,i)=>{
+      if(!c) return;
+      const lc=String(c).toLowerCase();
+      if(firstNameIdx===null && /(first name|firstname|given name)/.test(lc)) firstNameIdx=i;
+      if(lastNameIdx===null && /(last name|lastname|surname|family name)/.test(lc)) lastNameIdx=i;
+    });
     rows.slice(1).forEach(row=>{
-      if(!row||row.every(c=>c===null||c===''))return;
+      if(!row||row.every(c=>c===null||c==='')) return;
       const rec={_source:name,_type:recordType||'meeting'};
       STANDARD_FIELDS.forEach(({key})=>{
-        const idx=fi2i[key];let val=idx!==undefined?row[idx]:null;
-        if(key==='date'||key==='end_date')val=fmtDate(val);
-        else if(key==='attendees')val=parseFloat(val)||0;
+        const idx=fi2idx[key];
+        let val=idx!==undefined?row[idx]:null;
+        if(key==='date'||key==='end_date') val=fmtDate(val);
+        else if(key==='attendees') val=parseFloat(val)||0;
+        else if(key==='budget') {
+          if (val==null||val==='') val=0;
+          else val = parseFloat(String(val).replace(/[$,£€\s]/g,'').replace(/[()]/g,''))||0;
+        }
         else val=val!=null&&val!==''?String(val).trim():'';
         rec[key]=val;
       });
-      if(!rec.date&&!rec.event_name)return;
+      // If event_name mapped to a first-name column and a last-name column exists,
+      // combine them so "Name" reads as "First Last" everywhere.
+      if (firstNameIdx!==null && lastNameIdx!==null && fi2idx.event_name===firstNameIdx) {
+        const fn = row[firstNameIdx], ln = row[lastNameIdx];
+        if (fn != null && String(fn).trim() && ln != null && String(ln).trim()) {
+          rec.event_name = `${String(fn).trim()} ${String(ln).trim()}`;
+        }
+      }
+      if(!rec.date&&!rec.event_name) return;
+      // enrich with reference data using the (possibly user-overridden) resolution
+      if (REF() && rec.site) {
+        const r = resolution.get(rec.site);
+        const target = r && r.overrideTo ? REF().bySiteName[r.overrideTo.toLowerCase()] : null;
+        if (target) {
+          rec._canonicalSite = target.siteName;
+          rec._buildingRefId = target.buildingRefId;
+          rec._state = target.state;
+          rec._regionalLeader = target.regionalLeader;
+          rec._assignedCMs = target.assignedCMs;
+          rec._capacity = target.capacity;
+          rec._baseline = target.baseline;
+        }
+      }
+      // Hard scope: keep only records that resolved to one of the master reference sites.
+      // Per spec, all tabs render against the 9 reference locations only.
+      if (REF() && !rec._canonicalSite) {
+        state.filteredOutCount++;
+        state.filteredOutBySource[name] = (state.filteredOutBySource[name]||0) + 1;
+        return;
+      }
+      // Exclude weekends — CM operations are Mon–Fri only.
+      if (rec.date) {
+        const dow = new Date(rec.date + 'T12:00:00').getDay();
+        if (dow === 0 || dow === 6) return; // 0=Sunday, 6=Saturday
+      }
+      // For space reservations, only keep confirmed/reserved statuses.
+      // Cancelled, pending, waitlisted, etc. should not count toward load or table totals.
+      if (rec._type === 'space' && rec.status) {
+        const sl = rec.status.toLowerCase();
+        if (!sl.includes('confirm') && !sl.includes('reserv')) {
+          state.filteredOutCount++;
+          state.filteredOutBySource[name] = (state.filteredOutBySource[name]||0) + 1;
+          return;
+        }
+      }
       state.records.push(rec);
     });
   });
 }
 
-// ── CAPACITY MODEL ─────────────────────────────────────────────────────────
-function effortScore(rec) {
-  let pts = 0;
-  const isCanceled = (rec.status||'').toLowerCase().includes('cancel');
-  if (isCanceled) return 0;
+// ── VALIDATION STEP ────────────────────────────────────────────────────────
+// Keyed by record index: { status, attendees, budget, vip }
+const valEdits = {};
+let valWindowDays = 10;
 
-  if (rec._type === 'traveler') return cap.travelerPts;
-  if (rec._type === 'space') return 1;
-
-  const mult = rec._type === 'event' ? cap.eventMult : 1;
-  pts += cap.perMeeting * mult;
-  pts += (rec.attendees || 0) * cap.perAttendee * mult;
-
-  const cat = (rec.catering||'').toLowerCase();
-  if (cat && cat !== 'no' && cat !== 'n/a' && cat !== '') pts += cap.cateringBonus * mult;
-
-  const vip = (rec.vip||'').toLowerCase();
-  if (vip && vip !== 'no' && vip !== 'n/a' && vip !== '') pts += cap.externalBonus * mult;
-
-  const ship = (rec.shipping||'').toLowerCase();
-  if (ship && ship !== 'no' && ship !== 'n/a' && ship !== '') pts += cap.shippingBonus * mult;
-
-  return pts;
+function getValidationWindow() {
+  const today = todayStr();
+  const end = addDays(today, valWindowDays - 1);
+  return { today, end };
 }
 
-function dayCapacityPct(effortPts) {
-  // baseline + effort as % of remaining capacity
-  const remaining = 100 - cap.baseline;
-  const effortPct = Math.min((effortPts / cap.maxPts) * remaining, remaining + 20); // allow overflow past 100%
-  return Math.round(cap.baseline + effortPct);
+function isFlaggedRed(r) {
+  // Missing required fields
+  return !r.date || !r._canonicalSite || !r.event_name;
 }
 
-function capClass(pct) {
-  if (pct === 0) return 'cap-0';
-  if (pct <= 25) return 'cap-1';
-  if (pct <= 60) return 'cap-2';
-  if (pct <= 85) return 'cap-3';
-  if (pct <= 100) return 'cap-4';
-  return 'cap-5';
-}
-function capLabel(pct) {
-  if (pct === 0) return 'Off';
-  if (pct <= 25) return 'Light';
-  if (pct <= 60) return 'Mod';
-  if (pct <= 85) return 'Busy';
-  if (pct <= 100) return 'Full';
-  return 'Over!';
+function isFlaggedYellow(r) {
+  if (isFlaggedRed(r)) return false;
+  const s = (r.status || '').toLowerCase();
+  const blankStatus = !s;
+  const ambiguousStatus = s && !s.includes('confirm') && !s.includes('cancel') && !s.includes('pend') && !s.includes('approv') && !s.includes('reserv');
+  const zeroAttendees = (r._type === 'meeting' || r._type === 'event') && (!r.attendees || r.attendees === 0);
+  return blankStatus || ambiguousStatus || zeroAttendees;
 }
 
-// ── DASHBOARD ──────────────────────────────────────────────────────────────
-function todayStr(){const d=new Date();d.setHours(0,0,0,0);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-function addDays(s,n){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return fmtDate(d.toISOString());}
+function applyValEdits() {
+  // Merge valEdits back into state.records (by index)
+  Object.entries(valEdits).forEach(([idx, edits]) => {
+    const i = parseInt(idx, 10);
+    if (!state.records[i]) return;
+    Object.assign(state.records[i], edits);
+  });
+}
 
-function renderDashboard(){
-  Object.values(charts).forEach(c=>c&&c.destroy&&c.destroy());charts={};
-  const today=todayStr(), to90=addDays(today,90);
-  const sites=[...new Set(state.records.map(r=>r.site).filter(Boolean))].sort();
-  const cms=[...new Set(state.records.map(r=>r.cm_captain).filter(Boolean))].sort();
-  const types=[...new Set(state.records.map(r=>r._type).filter(Boolean))].sort();
-  const statuses=[...new Set(state.records.map(r=>r.status).filter(Boolean))].sort();
+function renderValidationStep() {
+  const { today, end } = getValidationWindow();
+  // Get records within window, from already-applied mappings
+  const inWindow = state.records
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.date && r.date >= today && r.date <= end);
 
-  document.getElementById('dashboard-content').innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:14px">
-      <div><div class="section-title">Community Manager Capacity Forecast</div><div class="section-sub">${state.records.length.toLocaleString()} total records · capacity model reflects real effort, not just meeting count</div></div>
-      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-        <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px">From</label><input type="date" id="f-from" value="${today}" onchange="refreshDash()" style="width:128px"></div>
-        <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px">To</label><input type="date" id="f-to" value="${to90}" onchange="refreshDash()" style="width:128px"></div>
-        <button class="btn btn-sm btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
+  const bySite = {};
+  inWindow.forEach(({ r, i }) => {
+    const site = r._canonicalSite || r.site || '(Unknown)';
+    if (!bySite[site]) bySite[site] = [];
+    bySite[site].push({ r, i });
+  });
+
+  const sitesInOrder = REF()
+    ? REF().sites.map(s => s.siteName).filter(s => bySite[s])
+    : Object.keys(bySite).sort();
+
+  const totalFlagged = inWindow.filter(({ r }) => isFlaggedRed(r) || isFlaggedYellow(r)).length;
+  const totalRed = inWindow.filter(({ r }) => isFlaggedRed(r)).length;
+
+  const windowOpts = [7, 10, 14, 21, 30].map(n =>
+    `<option value="${n}"${valWindowDays === n ? ' selected' : ''}>${n} days</option>`
+  ).join('');
+
+  const siteHtml = sitesInOrder.map(site => {
+    const entries = bySite[site] || [];
+    const cmList = REF()?.bySiteName?.[site.toLowerCase()]?.assignedCMs || [];
+    const redCount = entries.filter(({ r }) => isFlaggedRed(r)).length;
+    const yellowCount = entries.filter(({ r }) => isFlaggedYellow(r)).length;
+    const flagBadge = redCount
+      ? `<span style="background:#FEE2E2;color:#991B1B;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:8px">🔴 ${redCount + yellowCount} issue${redCount + yellowCount !== 1 ? 's' : ''}</span>`
+      : yellowCount
+        ? `<span style="background:#FEF3C7;color:#92400E;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:8px">🟡 ${yellowCount} issue${yellowCount !== 1 ? 's' : ''}</span>`
+        : `<span style="background:#D1FAE5;color:#065F46;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;margin-left:8px">✓ Clean</span>`;
+
+    const rows = entries.map(({ r, i }) => {
+      const red = isFlaggedRed(r);
+      const yellow = !red && isFlaggedYellow(r);
+      const rowBg = red ? '#FFF5F5' : yellow ? '#FFFBEB' : 'transparent';
+      const flagCell = red
+        ? `<span title="Missing required field (date, site, or event name)" style="cursor:default">🔴</span>`
+        : yellow
+          ? `<span title="Status ambiguous or attendees missing for meeting/event" style="cursor:default">🟡</span>`
+          : `<span style="color:#CBD5E1">—</span>`;
+
+      const edit = valEdits[i] || {};
+      const curStatus = edit.status !== undefined ? edit.status : (r.status || '');
+      const curAttendees = edit.attendees !== undefined ? edit.attendees : (r.attendees || '');
+      const curBudget = edit.budget !== undefined ? edit.budget : (r.budget || '');
+      const curVip = edit.vip !== undefined ? edit.vip : (r.vip || '');
+
+      const statusOpts = ['Confirmed', 'Pending Approval', 'Cancelled', 'Waitlisted', 'Other']
+        .map(s => `<option value="${s}"${curStatus === s ? ' selected' : ''}>${s}</option>`).join('');
+      const yesNoOpts = ['', 'Yes', 'No']
+        .map(s => `<option value="${s}"${curVip === s ? ' selected' : ''}>${s || '—'}</option>`).join('');
+
+      const typeLabel = r._type || 'meeting';
+      const typeBadge = `<span class="badge badge-${typeLabel}" style="font-size:9px">${typeLabel}</span>`;
+
+      return `<tr style="background:${rowBg}">
+        <td style="white-space:nowrap;font-weight:600;font-size:11px">${r.date || '<span style="color:#EF4444">Missing</span>'}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="${escapeHtml(r.event_name || '')}">${escapeHtml(r.event_name || '—')}</td>
+        <td>${typeBadge}</td>
+        <td>
+          <select onchange="valEdit(${i},'status',this.value)" style="font-size:11px;padding:2px 4px;width:150px">
+            <option value="${escapeHtml(curStatus)}"${!['Confirmed','Pending Approval','Cancelled','Waitlisted','Other'].includes(curStatus) ? ' selected' : ''}>${escapeHtml(curStatus || '— select —')}</option>
+            ${statusOpts}
+          </select>
+        </td>
+        <td><input type="number" min="0" value="${escapeHtml(String(curAttendees))}" onchange="valEdit(${i},'attendees',+this.value)" style="width:64px;font-size:11px;padding:2px 4px;border:1px solid #E2E8F0;border-radius:4px;text-align:right"></td>
+        <td><input type="number" min="0" step="100" value="${escapeHtml(String(curBudget))}" onchange="valEdit(${i},'budget',+this.value)" style="width:80px;font-size:11px;padding:2px 4px;border:1px solid #E2E8F0;border-radius:4px;text-align:right"></td>
+        <td>
+          <select onchange="valEdit(${i},'vip',this.value)" style="font-size:11px;padding:2px 4px;width:64px">
+            ${yesNoOpts}
+          </select>
+        </td>
+        <td style="font-size:11px;color:#64748B;white-space:nowrap">${escapeHtml(r.cm_captain || '—')}</td>
+        <td style="text-align:center">${flagCell}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="card" style="margin-bottom:18px">
+      <div class="card-header" style="background:#F8FAFC">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+          <span style="font-size:15px;font-weight:700;color:#1E293B">${escapeHtml(site)}</span>
+          ${flagBadge}
+          <span style="font-size:12px;color:#94A3B8">${entries.length} record${entries.length !== 1 ? 's' : ''} in window</span>
+          ${cmList.length ? `<span style="font-size:12px;color:#64748B">· CMs: ${cmList.map(escapeHtml).join(', ')}</span>` : ''}
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="upcoming-table" style="font-size:12px">
+          <thead><tr>
+            <th>Date</th>
+            <th>Name / Event</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th style="text-align:right">Attendees</th>
+            <th style="text-align:right">Budget</th>
+            <th>VIP</th>
+            <th>CM Lead</th>
+            <th style="text-align:center">Flag</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  const emptySites = REF()
+    ? REF().sites.map(s => s.siteName).filter(s => !bySite[s])
+    : [];
+
+  document.getElementById('validate-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;flex-wrap:wrap;gap:14px">
+      <div>
+        <div class="section-title">Validate &amp; Clean</div>
+        <div class="section-sub">Review upcoming records by site. Edit status, attendees, budget, or VIP fields inline before building the dashboard.</div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:12px;font-weight:600;color:#374151">Window:</label>
+          <select onchange="valWindowDays=+this.value;renderValidationStep()" style="font-size:12px;padding:4px 8px;border:1px solid #E2E8F0;border-radius:6px">
+            ${windowOpts}
+          </select>
+        </div>
+        <button class="btn btn-sm btn-secondary" onclick="exportValidationCSV()">⬇ Export CSV</button>
       </div>
     </div>
 
-    <div class="dash-layout">
-      <!-- LEFT PANEL -->
+    <div style="display:flex;gap:14px;margin-bottom:22px;flex-wrap:wrap">
+      <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px;font-weight:800;color:#1E293B">${inWindow.length}</span>
+        <span style="font-size:12px;color:#64748B">records<br>in window</span>
+      </div>
+      <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px;font-weight:800;color:#1E293B">${sitesInOrder.length}</span>
+        <span style="font-size:12px;color:#64748B">sites<br>with data</span>
+      </div>
+      ${totalRed ? `<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px;font-weight:800;color:#991B1B">${totalRed}</span>
+        <span style="font-size:12px;color:#991B1B">🔴 missing<br>required fields</span>
+      </div>` : ''}
+      ${totalFlagged - totalRed > 0 ? `<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px;font-weight:800;color:#92400E">${totalFlagged - totalRed}</span>
+        <span style="font-size:12px;color:#92400E">🟡 status or<br>attendees unclear</span>
+      </div>` : ''}
+      ${totalFlagged === 0 ? `<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:24px">✅</span>
+        <span style="font-size:12px;color:#065F46">All records<br>look clean!</span>
+      </div>` : ''}
+    </div>
+
+    ${siteHtml || '<div class="empty-state">No records found in the next ' + valWindowDays + ' days. Try expanding the window or check that dates parsed correctly.</div>'}
+
+    ${emptySites.length ? `<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:14px 18px;margin-top:4px">
+      <div style="font-size:12px;font-weight:600;color:#64748B;margin-bottom:6px">Sites with no data in this window:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${emptySites.map(s => `<span style="font-size:11px;background:white;border:1px solid #E2E8F0;border-radius:6px;padding:3px 9px;color:#94A3B8">${escapeHtml(s)}</span>`).join('')}</div>
+    </div>` : ''}
+  `;
+}
+
+function valEdit(idx, field, value) {
+  if (!valEdits[idx]) valEdits[idx] = {};
+  valEdits[idx][field] = value;
+  // Re-flag the row in-place without full re-render (for performance)
+  // Apply the edit to the live record too so flag recalculation works
+  if (state.records[idx]) state.records[idx][field] = value;
+  // Re-render just the flag cell and row background by full step refresh
+  renderValidationStep();
+}
+
+function exportValidationCSV() {
+  applyValEdits();
+  const { today, end } = getValidationWindow();
+  const recs = state.records.filter(r => r.date && r.date >= today && r.date <= end);
+  const fields = ['_source','_type','date','_canonicalSite','event_name','status','attendees','budget','vip','cm_captain','catering','room','event_type','notes'];
+  const rows = [fields.join(','), ...recs.map(r => fields.map(f => `"${String(r[f] == null ? '' : r[f]).replace(/"/g,'""')}"`).join(','))];
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'cm-validation-export.csv'; a.click();
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────────────────────
+const COLORS=['#4338CA','#06B6D4','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16','#F43F5E'];
+
+// ── EXEC RISK MODEL (Executive Visibility) ─────────────────────────────────
+// Option A: in-tool simulation controls (overlay). Adjust assumptions live; results update immediately.
+// Capacity model (defaults):
+//   Effective CMs = Raw CMs × PTO factor (default 0.85)
+//   Daily capacity = Effective CMs × meeting-equivalents per day (default 5)
+// Load model (defaults):
+//   Meetings(1) + Events(5) + VIP(3) + Attendees/75 + Catering(2) + Travelers(0.5)
+// Risk thresholds (defaults):
+//   Elevated >= 70% utilization; High > 100% utilization OR override rules.
+
+const MODEL_DEFAULTS = {
+  // Capacity
+  ptoFactor: 0.85,
+  meetingEqPerDay: 5,
+
+  // Baseline daily load — CMs are never at 0% even with zero bookings
+  // (site walks, supply restocking, tech checks, associate drop-ins, etc.)
+  baselineLoad: 25,   // % floor applied to every site-day regardless of bookings
+
+  // Weights
+  wMeeting: 1,
+  wEvent: 5,
+  wVip: 3,
+  wCatering: 2,
+  wTraveler: 0.5,
+  attendeeDivisor: 75,
+
+  // Thresholds
+  thrElevated: 0.70,
+  thrHigh: 1.00,
+
+  // Override sensitivity
+  vipTrigger: 4,
+};
+
+let MODEL = loadModel();
+
+function loadModel() {
+  try {
+    const raw = localStorage.getItem('cmForecastModel');
+    if (!raw) return { ...MODEL_DEFAULTS };
+    const parsed = JSON.parse(raw);
+    return { ...MODEL_DEFAULTS, ...parsed };
+  } catch (_) {
+    return { ...MODEL_DEFAULTS };
+  }
+}
+
+function saveModel() {
+  try { localStorage.setItem('cmForecastModel', JSON.stringify(MODEL)); } catch (_) {}
+}
+
+function resetModel() {
+  MODEL = { ...MODEL_DEFAULTS };
+  saveModel();
+  refreshDash();
+}
+
+function setModel(key, val) {
+  const num = (val === '' || val == null) ? null : Number(val);
+  MODEL[key] = (num == null || Number.isNaN(num)) ? MODEL_DEFAULTS[key] : num;
+
+  // Guardrails
+  MODEL.ptoFactor = Math.max(0.5, Math.min(1.0, Number(MODEL.ptoFactor)));
+  MODEL.meetingEqPerDay = Math.max(1, Math.min(12, Number(MODEL.meetingEqPerDay)));
+  MODEL.baselineLoad = Math.max(0, Math.min(60, Number(MODEL.baselineLoad)));
+  MODEL.attendeeDivisor = Math.max(25, Math.min(300, Number(MODEL.attendeeDivisor)));
+  MODEL.thrElevated = Math.max(0.2, Math.min(0.95, Number(MODEL.thrElevated)));
+  MODEL.thrHigh = Math.max(MODEL.thrElevated + 0.01, Math.min(2.0, Number(MODEL.thrHigh)));
+  MODEL.vipTrigger = Math.max(1, Math.min(10, Math.round(Number(MODEL.vipTrigger))));
+
+  // Keep weights sensible
+  ['wMeeting','wEvent','wVip','wCatering','wTraveler'].forEach(k => {
+    MODEL[k] = Math.max(0, Math.min(25, Number(MODEL[k])));
+  });
+
+  saveModel();
+  refreshDash();
+}
+
+function rawCMCountForSite(siteName) {
+  if (!REF() || !siteName) return 0;
+  const s = REF().bySiteName[siteName.toLowerCase()];
+  const cms = s && Array.isArray(s.assignedCMs) ? s.assignedCMs : [];
+  return cms.length;
+}
+
+function effectiveCMCount(siteName) {
+  const raw = rawCMCountForSite(siteName);
+  return raw ? raw * MODEL.ptoFactor : 0;
+}
+
+function dailyCapacity(siteName) {
+  const eff = effectiveCMCount(siteName);
+  return eff * MODEL.meetingEqPerDay;
+}
+
+function hasCatering(r) {
+  const v = (r.catering || '').toString().trim();
+  if (!v) return false;
+  return !/^(no|n\/a|none|false|0)$/i.test(v);
+}
+
+function siteKey(r) {
+  return (r._canonicalSite || r.site || '').toString();
+}
+
+function buildSiteDayStats(records) {
+  const stats = {};
+  const add = (site, date) => {
+    stats[site] = stats[site] || {};
+    stats[site][date] = stats[site][date] || {
+      site, date,
+      meetings: 0,
+      events: 0,
+      travelers: 0,
+      vip: 0,
+      attendees: 0,
+      catering: 0,
+      load: 0,
+      capacity: 0,
+      util: 0,
+      flags: {},
+    };
+    return stats[site][date];
+  };
+
+  records.forEach(r => {
+    const d = r.date || '';
+    if (!d) return;
+    const site = siteKey(r);
+    if (!site) return;
+    const row = add(site, d);
+
+    if (r._type === 'meeting') {
+      row.meetings += 1;
+      row.vip += hasVip(r) ? 1 : 0;
+      row.attendees += (r.attendees || 0);
+      if (hasCatering(r)) row.catering += 1;
+    } else if (r._type === 'event') {
+      row.events += 1;
+      row.vip += hasVip(r) ? 1 : 0;
+      row.attendees += (r.attendees || 0);
+      if (hasCatering(r)) row.catering += 1;
+    } else if (r._type === 'traveler') {
+      row.travelers += 1;
+    } else {
+      // space reservations intentionally excluded from capacity load in this model
+    }
+  });
+
+  // compute load + utilization
+  Object.keys(stats).forEach(site => {
+    const cap = dailyCapacity(site);
+    Object.keys(stats[site]).forEach(date => {
+      const row = stats[site][date];
+      row.capacity = cap;
+      row.load = (
+        (row.meetings * MODEL.wMeeting) +
+        (row.events * MODEL.wEvent) +
+        (row.vip * MODEL.wVip) +
+        (row.attendees / MODEL.attendeeDivisor) +
+        (row.catering * MODEL.wCatering) +
+        (row.travelers * MODEL.wTraveler)
+      );
+      const rawUtil = cap > 0 ? (row.load / cap) : 0;
+      // Baseline floor: CMs are never at 0% even with zero bookings.
+      // Accounts for site walks, supply checks, ad-hoc associate requests, etc.
+      row.util = Math.max((MODEL.baselineLoad || 0) / 100, rawUtil);
+    });
+  });
+
+  // overrides needing adjacent day context
+  const dateAdd = (s, n) => {
+    const d = new Date(s + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    return fmtDate(d.toISOString());
+  };
+
+  Object.keys(stats).forEach(site => {
+    Object.keys(stats[site]).forEach(date => {
+      const row = stats[site][date];
+      const tomorrow = dateAdd(date, 1);
+      const tomorrowRow = stats[site][tomorrow];
+      const eff = effectiveCMCount(site);
+      const highMeetings = row.meetings > (eff * MODEL.meetingEqPerDay);
+
+      row.flags.highMeetings = highMeetings;
+      row.flags.eventStack = row.events >= 2;
+      row.flags.eventPlusHighMeetings = (row.events >= 1) && highMeetings;
+      row.flags.badDayCombo = (row.events >= 1) && (row.vip >= MODEL.vipTrigger) && highMeetings;
+      row.flags.backToBackEvents = (row.events >= 1) && (tomorrowRow && tomorrowRow.events >= 1);
+
+      row.flags.overrideRed = row.flags.badDayCombo || row.flags.backToBackEvents || row.flags.eventStack || row.flags.eventPlusHighMeetings;
+      row.flags.status = riskStatus(row.util, row.flags.overrideRed);
+    });
+  });
+
+  return stats;
+}
+
+function riskStatus(util, overrideRed) {
+  if (overrideRed) return 'high';
+  if (util > MODEL.thrHigh) return 'high';
+  if (util >= MODEL.thrElevated) return 'elevated';
+  return 'normal';
+}
+
+function statusLabel(s) {
+  // Inline colored dot keeps severity legible at a glance without using emoji.
+  const dot = (color) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle"></span>`;
+  if (s === 'high') return { txt: 'High Risk', badge: 'status-canceled', icon: dot('#E11D48') };
+  if (s === 'elevated') return { txt: 'Elevated', badge: 'status-pending', icon: dot('#F59E0B') };
+  return { txt: 'Normal', badge: 'status-confirmed', icon: dot('#10B981') };
+}
+
+function topDrivers(row) {
+  const d = [];
+  if (row.events) d.push(`${row.events} event${row.events===1?'':'s'}`);
+  if (row.vip) d.push(`${row.vip} VIP visitor${row.vip===1?'':'s'}`);
+  if (row.meetings) d.push(`${row.meetings} meeting${row.meetings===1?'':'s'}`);
+  if (row.catering) d.push(`${row.catering} catering order${row.catering===1?'':'s'}`);
+  if (row.travelers) d.push(`${row.travelers} traveler${row.travelers===1?'':'s'}`);
+  if (row.flags.backToBackEvents) d.push('back-to-back events');
+  if (row.flags.highMeetings) d.push('high meeting volume');
+  return d.length ? d.join(' · ') : '—';
+}
+
+function pct(n) {
+  if (!isFinite(n)) return '—';
+  return (n*100).toFixed(n*100 < 10 ? 1 : 0) + '%';
+}
+
+
+const TABS = [
+  { id:'overview',  label:'Overview',                    scope:()=>true },
+  { id:'workspace', label:'Workspace Reservations',      scope:r=>r._type==='space'||r._type==='traveler' },
+  { id:'meetings',  label:'Meetings',                    scope:r=>r._type==='meeting' },
+  { id:'events',    label:'Events',                      scope:r=>r._type==='event' },
+];
+// Which filter groups are visible per tab. Hidden chips still apply if previously set
+// (user can press Clear Filters to reset).
+const TAB_FILTERS = {
+  overview:  { site:1, status:0 },
+  workspace: { site:1, status:0 },
+  meetings:  { site:1, status:0 },
+  events:    { site:1, status:1 },
+};
+
+function todayStr() {
+  const d=new Date(); d.setHours(0,0,0,0);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function addDays(s,n) { const d=new Date(s+'T12:00:00'); d.setDate(d.getDate()+n); return fmtDate(d.toISOString()); }
+
+function setDatePreset(preset) {
+  const todayS = todayStr();
+  const now = new Date(todayS + 'T12:00:00');
+  let from = todayS, to = todayS;
+  if (preset === 'this_week') {
+    from = todayS; to = addDays(todayS, 6);
+  } else if (preset === 'next_week') {
+    from = addDays(todayS, 7); to = addDays(todayS, 13);
+  } else if (preset === 'this_month') {
+    from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    to = fmtDate(new Date(now.getFullYear(), now.getMonth()+1, 0));
+  } else if (preset === 'next_month') {
+    const nm = new Date(now.getFullYear(), now.getMonth()+1, 1);
+    to = fmtDate(new Date(now.getFullYear(), now.getMonth()+2, 0));
+    from = `${nm.getFullYear()}-${String(nm.getMonth()+1).padStart(2,'0')}-01`;
+  } else if (preset === 'next_30') {
+    from = todayS; to = addDays(todayS, 29);
+  } else if (preset === 'next_90') {
+    from = todayS; to = addDays(todayS, 89);
+  }
+  document.getElementById('f-from').value = from;
+  document.getElementById('f-to').value = to;
+  refreshDash();
+}
+
+function renderDashboard() {
+  Object.values(charts).forEach(c=>c&&c.destroy&&c.destroy()); charts={};
+  const today=todayStr();
+  const to90=addDays(today,90);
+  const sites=getAllSiteNames();
+  const regions=getAllRegionalLeaders();
+  const cms=getAllCMs();
+  const statuses=[...new Set(state.records.map(r=>r.status).filter(Boolean))].sort();
+  const tabCounts = {};
+  TABS.forEach(t => {
+    if (t.id === 'overview') {
+      // Show location count for Overview — total record count is jargony and unhelpful for execs
+      tabCounts[t.id] = getAllSiteNames().length;
+    } else {
+      tabCounts[t.id] = state.records.filter(t.scope).length;
+    }
+  });
+
+  document.getElementById('dashboard-content').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;flex-wrap:wrap;gap:14px">
       <div>
-        <div class="side-panel">
-
-          <!-- FILTERS (always visible at top) -->
-          <div class="panel-section">
-            <div class="panel-title">🔽 Filters</div>
-            <div style="margin-bottom:12px">
-              <div class="filter-label">Site</div>
-              <div class="filter-chips" id="fc-sites">
-                <span class="chip active" onclick="toggleChip(this,'site','all')">All</span>
-                ${sites.map(s=>`<span class="chip" onclick="toggleChip(this,'site','${esc(s)}')">${s}</span>`).join('')}
-              </div>
-            </div>
-            <div style="margin-bottom:12px">
-              <div class="filter-label">CM Captain</div>
-              <div class="filter-chips" id="fc-cms">
-                <span class="chip active" onclick="toggleChip(this,'cm','all')">All</span>
-                ${cms.slice(0,20).map(c=>`<span class="chip" onclick="toggleChip(this,'cm','${esc(c)}')">${c}</span>`).join('')}
-              </div>
-            </div>
-            <div style="margin-bottom:12px">
-              <div class="filter-label">Record Type</div>
-              <div class="filter-chips" id="fc-rtypes">
-                <span class="chip active" onclick="toggleChip(this,'rtype','all')">All</span>
-                ${types.map(t=>`<span class="chip" onclick="toggleChip(this,'rtype','${t}')">${t}</span>`).join('')}
-              </div>
-            </div>
-            <div style="margin-bottom:12px">
-              <div class="filter-label">Status</div>
-              <div class="filter-chips" id="fc-statuses">
-                <span class="chip active" onclick="toggleChip(this,'status','all')">All</span>
-                ${statuses.slice(0,12).map(s=>`<span class="chip" onclick="toggleChip(this,'status','${esc(s)}')">${s}</span>`).join('')}
-              </div>
-            </div>
-            <button class="btn btn-sm btn-secondary" style="width:100%;justify-content:center" onclick="clearFilters()">✕ Clear Filters</button>
-          </div>
-
-          <!-- CAPACITY MODEL (collapsible, below filters) -->
-          <div class="panel-section">
-            <details>
-              <summary>⚙️ Capacity Model <span style="font-size:10px;color:#94A3B8;font-weight:400">· click to tune</span></summary>
-              <div style="margin-top:12px">
-                <div style="font-size:11px;color:#64748B;margin-bottom:14px">Adjust what makes a CM day "full". Changes update instantly.</div>
-
-                <div class="slider-row">
-                  <div class="slider-header"><span class="slider-label">📍 Baseline daily load</span><span class="slider-val" id="sv-baseline">${cap.baseline}%</span></div>
-                  <input type="range" min="0" max="60" value="${cap.baseline}" oninput="setCap('baseline',+this.value,'sv-baseline','%');refreshDash()">
-                  <div class="slider-desc">% used just by existing responsibilities — site walks, tours, supply runs, ad-hoc needs</div>
-                </div>
-
-                <div class="slider-row">
-                  <div class="slider-header"><span class="slider-label">📊 Points = 100% capacity</span><span class="slider-val" id="sv-maxPts">${cap.maxPts}pts</span></div>
-                  <input type="range" min="20" max="300" step="5" value="${cap.maxPts}" oninput="setCap('maxPts',+this.value,'sv-maxPts','pts');refreshDash()">
-                  <div class="slider-desc">Total effort points a CM can handle per day (beyond baseline)</div>
-                </div>
-
-                <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 8px">Per-Record Weights</div>
-
-                <div class="slider-row">
-                  <div class="slider-header"><span class="slider-label">🤝 Per meeting</span><span class="slider-val" id="sv-perMeeting">${cap.perMeeting}pts</span></div>
-                  <input type="range" min="1" max="40" value="${cap.perMeeting}" oninput="setCap('perMeeting',+this.value,'sv-perMeeting','pts');refreshDash()">
-                </div>
-
-                <div class="slider-row">
-                  <div class="slider-header"><span class="slider-label">👥 Per attendee</span><span class="slider-val" id="sv-perAttendee">${cap.perAttendee}pts</span></div>
-                  <input type="range" min="0" max="2" step="0.05" value="${cap.perAttendee}" oninput="setCap('perAttendee',parseFloat(this.value).toFixed(2),'sv-perAttendee','pts');refreshDash()">
-                </div>
-
-                <div class="slider-row">
-                  <div class="slider-header"><span class="slider-label">🍽️ Catering required</span><span class="slider-val" id="sv-cateringBonus">+${cap.cateringBonus}pts</span></div>
-                  <input type="range" min="0" max="40" value="${cap.cateringBonus}" oninput="setCap('cateringBonus',+this.value,'sv-cateringBonus','+','pts');refreshDash()">
-                </div>
-
-                <div class="slider-row">
-                  <div class="slider-header"><span class="slider-label">🏅 External/VIP guests</span><span class="slider-val" id="sv-externalBonus">+${cap.externalBonus}pts</span></div>
-                  <input type="range" min="0" max="40" value="${cap.externalBonus}" oninput="setCap('externalBonus',+this.value,'sv-externalBonus','+','pts');refreshDash()">
-                </div>
-
-                <div class="slider-row">
-                  <div class="slider-header"><span class="slider-label">📦 Items shipped to site</span><span class="slider-val" id="sv-shippingBonus">+${cap.shippingBonus}pts</span></div>
-                  <input type="range" min="0" max="30" value="${cap.shippingBonus}" oninput="setCap('shippingBonus',+this.value,'sv-shippingBonus','+','pts');refreshDash()">
-                </div>
-
-                <div class="slider-row">
-                  <div class="slider-header"><span class="slider-label">🎯 Event multiplier</span><span class="slider-val" id="sv-eventMult">${cap.eventMult}×</span></div>
-                  <input type="range" min="1" max="6" step="0.5" value="${cap.eventMult}" oninput="setCap('eventMult',parseFloat(this.value).toFixed(1),'sv-eventMult','×');refreshDash()">
-                  <div class="slider-desc">Events count as this many times more work than a standard meeting</div>
-                </div>
-
-                <div class="slider-row">
-                  <div class="slider-header"><span class="slider-label">✈️ Per traveler</span><span class="slider-val" id="sv-travelerPts">${cap.travelerPts}pts</span></div>
-                  <input type="range" min="0" max="20" value="${cap.travelerPts}" oninput="setCap('travelerPts',+this.value,'sv-travelerPts','pts');refreshDash()">
-                </div>
-
-                <button class="btn btn-sm btn-secondary" style="width:100%;justify-content:center;margin-top:4px" onclick="resetCap()">↺ Reset to defaults</button>
-              </div>
-            </details>
-          </div>
-
+        <div class="section-title">Community Manager Forecast</div>
+        <div style="font-size:13px;color:#475569;margin-top:3px;max-width:640px;line-height:1.5">Community Managers run daily operations at each office — this dashboard forecasts when a location's team is approaching capacity so leadership can prepare early.</div>
+        <div class="section-sub" id="dash-subtitle" style="margin-top:5px"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+          ${['this_week','next_week','this_month','next_month','next_30','next_90'].map(p=>{
+            const label={'this_week':'This Week','next_week':'Next Week','this_month':'This Month','next_month':'Next Month','next_30':'Next 30 Days','next_90':'Next 90 Days'}[p];
+            return `<button style="font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;border:1px solid #E2E8F0;background:#F8FAFC;color:#475569;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='#F1F5F9'" onmouseout="this.style.background='#F8FAFC'" onclick="setDatePreset('${p}')">${label}</button>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">From</label><input type="date" id="f-from" value="${today}" onchange="refreshDash()" style="width:130px"></div>
+          <div><label style="font-size:11px;color:#64748B;display:block;margin-bottom:4px">To</label><input type="date" id="f-to" value="${to90}" onchange="refreshDash()" style="width:130px"></div>
+          <button class="btn btn-sm btn-secondary" onclick="exportCSV()">Export CSV</button>
         </div>
       </div>
-
-      <!-- MAIN CONTENT -->
+    </div>
+    <div class="dash-tabs" role="tablist" aria-label="Dashboard sections">
+      ${TABS.map(t=>`<button class="dash-tab${t.id===activeTab?' active':''}" data-tab="${t.id}" role="tab" aria-selected="${t.id===activeTab}" tabindex="${t.id===activeTab?'0':'-1'}" onclick="setTab('${t.id}')" onkeydown="onTabKey(event,'${t.id}')">
+        <span>${t.label}</span><span class="dash-tab-count">${tabCounts[t.id].toLocaleString()}</span>
+      </button>`).join('')}
+    </div>
+    <div class="dashboard-layout">
       <div>
-        <!-- Alerts -->
-        <div id="alert-zone"></div>
-
-        <!-- Summary -->
-        <div class="summary-grid" id="sum-cards"></div>
-
-        <!-- Charts -->
-        <div class="charts-grid">
-          <div class="chart-card"><div class="chart-title">📅 Weekly Volume</div><div class="chart-container"><canvas id="ch-weekly"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title">👤 CM Effort Load (total pts)</div><div class="chart-container"><canvas id="ch-cm"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title">🏢 Records by Site</div><div class="chart-container"><canvas id="ch-site"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title">📊 Status Breakdown</div><div class="chart-container"><canvas id="ch-status"></canvas></div></div>
-        </div>
-
-        <!-- Capacity Heatmap -->
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-header">
-            <div>
-              <div class="card-title">🔥 CM Capacity Heatmap — Next 6 Weeks</div>
-              <div style="font-size:11px;color:#64748B;margin-top:2px">% of daily capacity used, including baseline responsibilities. Red = overloaded.</div>
+        <div class="filters-panel">
+          <div class="filters-title">Filters</div>
+          <div class="filter-group" id="fg-sites">
+            <div class="filter-label">Location</div>
+            <div class="filter-chips" id="fc-sites">
+              <span class="chip active" onclick="toggleChip(this,'site','all')">All</span>
+              ${sites.map(s=>`<span class="chip${filterState.sites.has(s)?' active':''}" onclick="toggleChip(this,'site','${jsString(s)}')">${escapeHtml(s)}</span>`).join('')}
             </div>
           </div>
-          <div class="card-body" id="heatmap-wrap" style="overflow-x:auto"></div>
-        </div>
-
-        <!-- Upcoming Table -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">📋 Upcoming Records (sorted by date)</div>
-            <div id="tbl-count" class="text-muted"></div>
+          <div class="filter-group" id="fg-statuses">
+            <div class="filter-label">Status</div>
+            <div class="filter-chips" id="fc-statuses">
+              <span class="chip active" onclick="toggleChip(this,'status','all')">All</span>
+              ${statuses.slice(0,12).map(s=>`<span class="chip${filterState.statuses.has(s)?' active':''}" onclick="toggleChip(this,'status','${jsString(s)}')">${escapeHtml(s)}</span>`).join('')}
+            </div>
           </div>
-          <div style="max-height:520px;overflow-y:auto">
-            <table class="upcoming-table">
-              <thead><tr><th>Date</th><th>Site</th><th>Event / Meeting</th><th>CM Captain</th><th>Att.</th><th>Effort</th><th>Status</th><th>Type</th><th>Time</th></tr></thead>
-              <tbody id="tbl-body"></tbody>
-            </table>
-          </div>
+          <button class="btn btn-sm btn-secondary" style="width:100%;justify-content:center;margin-top:4px" onclick="clearFilters()">Clear Filters</button>
         </div>
       </div>
+      <div id="tab-panel"><!-- per-tab content goes here --></div>
     </div>`;
-
+  applyTabFilterVisibility();
   refreshDash();
 }
 
-function setCap(key, val, svId, prefix, suffix) {
-  cap[key] = parseFloat(val);
-  const el = document.getElementById(svId);
-  if(el) {
-    if(prefix === '+') el.textContent = `+${val}${suffix||''}`;
-    else el.textContent = `${val}${prefix||''}`;
-  }
-}
-function resetCap(){
-  Object.assign(cap,{baseline:25,maxPts:100,perMeeting:10,perAttendee:0.3,cateringBonus:12,externalBonus:8,eventMult:3.0,travelerPts:4,shippingBonus:6});
-  renderDashboard();
+function applyTabFilterVisibility() {
+  const cfg = TAB_FILTERS[activeTab] || TAB_FILTERS.overview;
+  const map = { site:'fg-sites', status:'fg-statuses' };
+  Object.entries(map).forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = cfg[k] ? '' : 'none';
+  });
+  // Events tab: hide the sidebar and go full-width so the table has maximum room.
+  const layout = document.querySelector('.dashboard-layout');
+  const sidebar = document.querySelector('.filters-panel');
+  const isEvents = activeTab === 'events';
+  if (layout)  layout.style.gridTemplateColumns = isEvents ? '1fr' : '';
+  if (sidebar) sidebar.style.display            = isEvents ? 'none' : '';
 }
 
-function toggleChip(el,dim,val){
-  const fk=dim==='site'?'sites':dim==='cm'?'cms':dim==='rtype'?'rtypes':'statuses';
-  const set=filterState[fk];
-  const cid=dim==='site'?'fc-sites':dim==='cm'?'fc-cms':dim==='rtype'?'fc-rtypes':'fc-statuses';
-  const cont=document.getElementById(cid);
-  if(val==='all'){set.clear();set.add('all');cont.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');}
-  else{
-    set.delete('all');cont.querySelector('.chip:first-child').classList.remove('active');
-    if(set.has(val)){set.delete(val);el.classList.remove('active');}else{set.add(val);el.classList.add('active');}
-    if(set.size===0){set.add('all');cont.querySelector('.chip:first-child').classList.add('active');}
+function setTab(id) {
+  if (!TABS.find(t => t.id === id) || id === activeTab) {
+    document.querySelector(`.dash-tab[data-tab="${id}"]`)?.focus();
+    return;
+  }
+  activeTab = id;
+  document.querySelectorAll('.dash-tab').forEach(el => {
+    const on = el.dataset.tab === id;
+    el.classList.toggle('active', on);
+    el.setAttribute('aria-selected', on ? 'true' : 'false');
+    el.setAttribute('tabindex', on ? '0' : '-1');
+    if (on) el.focus();
+  });
+  applyTabFilterVisibility();
+  refreshDash();
+}
+
+function onTabKey(e, id) {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+  e.preventDefault();
+  const i = TABS.findIndex(t => t.id === id);
+  let next = i;
+  if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+  else if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = TABS.length - 1;
+  setTab(TABS[next].id);
+}
+
+function toggleChip(el, dim, val) {
+  const fsKey=dim==='site'?'sites':dim==='region'?'regions':dim==='cm'?'cms':dim==='rtype'?'rtypes':'statuses';
+  const set=filterState[fsKey];
+  const containerId=dim==='site'?'fc-sites':dim==='region'?'fc-regions':dim==='cm'?'fc-cms':dim==='rtype'?'fc-rtypes':'fc-statuses';
+  const container=document.getElementById(containerId);
+  if(val==='all'){
+    set.clear(); set.add('all');
+    container.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+    el.classList.add('active');
+  } else {
+    set.delete('all');
+    container.querySelector('.chip:first-child').classList.remove('active');
+    if(set.has(val)){set.delete(val);el.classList.remove('active');}
+    else{set.add(val);el.classList.add('active');}
+    if(set.size===0){set.add('all');container.querySelector('.chip:first-child').classList.add('active');}
   }
   refreshDash();
 }
 
-function clearFilters(){
-  ['sites','cms','rtypes','statuses'].forEach(k=>{filterState[k].clear();filterState[k].add('all');});
+function clearFilters() {
+  ['sites','regions','cms','rtypes','statuses'].forEach(k=>{filterState[k].clear();filterState[k].add('all');});
   document.querySelectorAll('.filter-chips .chip').forEach(c=>c.classList.remove('active'));
   document.querySelectorAll('.filter-chips .chip:first-child').forEach(c=>c.classList.add('active'));
   refreshDash();
 }
 
-function getFiltered(){
-  const from=document.getElementById('f-from')?.value||'', to=document.getElementById('f-to')?.value||'';
+function getFiltered() {
+  const from=document.getElementById('f-from')?.value||'';
+  const to=document.getElementById('f-to')?.value||'';
   return state.records.filter(r=>{
-    if(from&&r.date&&r.date<from)return false;
-    if(to&&r.date&&r.date>to)return false;
-    if(!filterState.sites.has('all')&&!filterState.sites.has(r.site))return false;
-    if(!filterState.cms.has('all')&&!filterState.cms.has(r.cm_captain))return false;
-    if(!filterState.rtypes.has('all')&&!filterState.rtypes.has(r._type))return false;
-    if(!filterState.statuses.has('all')&&!filterState.statuses.has(r.status))return false;
+    if(from&&r.date&&r.date<from) return false;
+    if(to&&r.date&&r.date>to) return false;
+    if(!filterState.sites.has('all') && !filterState.sites.has(r._canonicalSite) && !filterState.sites.has(r.site)) return false;
+    if(!filterState.regions.has('all') && !filterState.regions.has(r._regionalLeader)) return false;
+    if(!filterState.cms.has('all')&&!filterState.cms.has(r.cm_captain)) return false;
+    if(!filterState.statuses.has('all')&&!filterState.statuses.has(r.status)) return false;
     return true;
   });
 }
 
-function refreshDash(){
-  const recs=getFiltered();
-  updateAlerts(recs); updateSummary(recs); updateCharts(recs); updateHeatmap(recs); updateTable(recs);
+function getTabFiltered() {
+  const t = TABS.find(x => x.id === activeTab) || TABS[0];
+  return getFiltered().filter(t.scope);
 }
 
-function updateAlerts(recs){
-  const zone=document.getElementById('alert-zone');if(!zone)return;
-  const today=todayStr(), soon=addDays(today,14);
-  const upcoming=recs.filter(r=>r.date&&r.date>=today&&r.date<=soon);
-  // Find overloaded days (any CM > 100%)
-  const cmDays={};
-  upcoming.forEach(r=>{
-    const cm=r.cm_captain||'Unknown', d=r.date;
-    if(!cmDays[cm]) cmDays[cm]={};
-    cmDays[cm][d]=(cmDays[cm][d]||0)+effortScore(r);
+function setHeatmapMode(m) {
+  heatmapMode = m;
+  if (activeTab === 'overview') updateHeatmap(getTabFiltered());
+}
+
+function refreshDash() {
+  Object.values(charts).forEach(c=>c&&c.destroy&&c.destroy()); charts={};
+  const recs = getTabFiltered();
+  const fn = { overview: renderOverview, workspace: renderWorkspace, meetings: renderMeetings, events: renderEvents }[activeTab] || renderOverview;
+  fn(recs);
+  updateSubtitle();
+  // tab counts in the strip reflect the *unfiltered* tab scope, so don't recompute here
+}
+
+function activeFilterPills() {
+  const out = [];
+  const set = (k) => filterState[k];
+  if (!set('sites').has('all'))    out.push({k:'sites',    label:'Location', vals:[...set('sites')]});
+  if (!set('statuses').has('all')) out.push({k:'statuses', label:'Status',   vals:[...set('statuses')]});
+  return out;
+}
+
+function updateSubtitle() {
+  const el = document.getElementById('dash-subtitle'); if (!el) return;
+  const tab = TABS.find(t => t.id === activeTab) || TABS[0];
+  const totalInTab = state.records.filter(tab.scope).length;
+  const shown = getTabFiltered().length;
+  const noun = { overview:'activity', workspace:'reservation', meetings:'meeting', events:'event' }[activeTab] || 'activity';
+  const pills = activeFilterPills();
+  const baseText = totalInTab ? `Showing ${shown.toLocaleString()} of ${totalInTab.toLocaleString()} ${noun}${totalInTab===1?'':'s'} across ${getAllSiteNames().length} location${getAllSiteNames().length===1?'':'s'}` : `No ${noun}s found in this date range`;
+  let pillsHtml = '';
+  if (pills.length) {
+    pillsHtml = ' &nbsp;·&nbsp; ' + pills.map(p =>
+      `<span style="display:inline-flex;align-items:center;gap:6px;background:#EDE9FE;color:#4338CA;border-radius:14px;padding:3px 10px;font-weight:600;margin-right:6px">${p.label}: ${p.vals.join(', ')}</span>`
+    ).join('');
+  }
+  const droppedHtml = state.filteredOutCount > 0
+    ? ` &nbsp;·&nbsp; <span style="color:#EF4444;font-weight:600">${state.filteredOutCount.toLocaleString()} rows skipped</span> <span style="color:#94A3B8">(unresolved location or excluded status)</span>`
+    : '';
+  el.innerHTML = baseText + pillsHtml + droppedHtml;
+}
+
+function countBy(recs, key) {
+  const m={}; recs.forEach(r=>{ const v = typeof key==='function' ? key(r) : r[key]; if (v) m[v]=(m[v]||0)+1; }); return m;
+}
+
+// ── TAB RENDERERS ──────────────────────────────────────────────────────────
+
+function renderWeekAheadGrid(recs, stats) {
+  const today = todayStr();
+  const days = Array.from({length: 7}, (_, i) => addDays(today, i));
+  const locations = REF() ? REF().sites.map(s => s.siteName)
+    : [...new Set(recs.map(r => r._canonicalSite || r.site).filter(Boolean))].sort();
+
+  if (!locations.length) {
+    return '<div class="empty-state" style="padding:32px">Upload data to see the week-ahead capacity view.</div>';
+  }
+
+  const hasData = recs.length > 0;
+
+  // Per-site record count within the 7-day window — used to distinguish "no data" from "no activity"
+  const daysSet = new Set(days);
+  const siteWeekCounts = {};
+  recs.forEach(r => {
+    const s = r._canonicalSite || r.site;
+    if (s && r.date && daysSet.has(r.date)) siteWeekCounts[s] = (siteWeekCounts[s] || 0) + 1;
   });
-  const overloaded=[];
-  Object.entries(cmDays).forEach(([cm,days])=>{
-    Object.entries(days).forEach(([d,pts])=>{
-      const pct=dayCapacityPct(pts);
-      if(pct>100) overloaded.push({cm,d,pct});
+
+  const dayMeta = days.map(d => {
+    const dt = new Date(d + 'T12:00:00');
+    return {
+      d,
+      weekday: dt.toLocaleString('default', {weekday: 'short'}),
+      mmdd: `${dt.getMonth()+1}/${dt.getDate()}`,
+      isToday: d === today,
+      isWeekend: dt.getDay() === 0 || dt.getDay() === 6,
+    };
+  });
+
+  // Week-level summary: count locations at each risk level for the week
+  const weekCounts = { high: 0, elevated: 0, ok: 0 };
+  locations.forEach(loc => {
+    let worst = 'ok';
+    days.forEach(d => {
+      const row = stats[loc]?.[d];
+      if (!row) return;
+      const s = row.flags?.status || riskStatus(row.util, false);
+      if (s === 'high') worst = 'high';
+      else if (s === 'elevated' && worst !== 'high') worst = 'elevated';
+    });
+    weekCounts[worst]++;
+  });
+
+  // Peak site: highest-util location-day this week
+  let peakSite = null;
+  let peakUtil = 0;
+  locations.forEach(loc => {
+    days.forEach((d, di) => {
+      const row = stats[loc]?.[d];
+      if (row && row.util > peakUtil) {
+        peakUtil = row.util;
+        peakSite = { loc, util: row.util, status: row.flags?.status || riskStatus(row.util, false), weekday: dayMeta[di].weekday, mmdd: dayMeta[di].mmdd };
+      }
     });
   });
-  let html='';
-  if(overloaded.length>0){
-    const items=overloaded.slice(0,3).map(o=>`${o.cm} on ${new Date(o.d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})} (${o.pct}%)`).join(', ');
-    html+=`<div class="alert-strip alert-danger">⚠️ <strong>Overloaded days in next 2 weeks:</strong> ${items}${overloaded.length>3?` +${overloaded.length-3} more`:''} — consider redistributing.</div>`;
-  }
-  const busy=Object.entries(cmDays).flatMap(([cm,days])=>Object.entries(days).filter(([d,pts])=>{const p=dayCapacityPct(pts);return p>=80&&p<=100;}).map(([d,pts])=>({cm,d,pct:dayCapacityPct(pts)}))).length;
-  if(busy>0&&overloaded.length===0) html+=`<div class="alert-strip alert-warn">📅 <strong>${busy} busy day(s)</strong> (80–100% capacity) in the next 2 weeks. Monitor closely.</div>`;
-  zone.innerHTML=html;
-}
 
-function updateSummary(recs){
-  const mtg=recs.filter(r=>r._type==='meeting').length;
-  const evt=recs.filter(r=>r._type==='event').length;
-  const trv=recs.filter(r=>r._type==='traveler').length;
-  const att=recs.reduce((s,r)=>s+(r.attendees||0),0);
-  const totalEffort=recs.reduce((s,r)=>s+effortScore(r),0);
-  const cmCount=new Set(recs.map(r=>r.cm_captain).filter(Boolean)).size;
-  const avgLoad=cmCount>0?Math.round(totalEffort/cmCount):'—';
-  document.getElementById('sum-cards').innerHTML=`
-    <div class="sum-card"><div class="sum-icon">📅</div><div class="sum-label">Meetings</div><div class="sum-value">${mtg.toLocaleString()}</div><div class="sum-sub">+ ${evt} events, ${trv} travelers</div></div>
-    <div class="sum-card"><div class="sum-icon">👥</div><div class="sum-label">Total Attendees</div><div class="sum-value">${att.toLocaleString()}</div><div class="sum-sub">across all meetings</div></div>
-    <div class="sum-card"><div class="sum-icon">⚡</div><div class="sum-label">Total Effort Points</div><div class="sum-value">${Math.round(totalEffort).toLocaleString()}</div><div class="sum-sub">across all records</div></div>
-    <div class="sum-card"><div class="sum-icon">📈</div><div class="sum-label">Avg Effort / CM</div><div class="sum-value">${avgLoad}</div><div class="sum-sub">points across ${cmCount} CMs</div></div>`;
-}
+  const C = {
+    high:     { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B', label: 'High' },
+    elevated: { bg: '#FFFBEB', border: '#FDE68A', text: '#92400E', label: 'Busy' },
+    normal:   { bg: '#F0FDF4', border: '#BBF7D0', text: '#065F46', label: 'OK' },
+  };
 
-function updateCharts(recs){
-  // Weekly
-  const wk={};
-  recs.forEach(r=>{if(!r.date)return;const d=new Date(r.date+'T12:00:00');if(isNaN(d))return;const ws=new Date(d);ws.setDate(d.getDate()-d.getDay());const k=fmtDate(ws.toISOString());wk[k]=(wk[k]||0)+1;});
-  const wkL=Object.keys(wk).sort().slice(0,20);
-  if(charts.weekly)charts.weekly.destroy();
-  const c1=document.getElementById('ch-weekly');
-  if(c1)charts.weekly=new Chart(c1,{type:'bar',data:{labels:wkL.map(k=>{const d=new Date(k+'T12:00:00');return`${d.toLocaleString('default',{month:'short'})} ${d.getDate()}`;}),datasets:[{label:'Records',data:wkL.map(k=>wk[k]),backgroundColor:'#4338CA',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true},x:{ticks:{maxTicksLimit:10}}}}});
+  let html = `<div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;min-width:520px">
+      <thead><tr>
+        <th style="text-align:left;padding:8px 14px 10px;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #E2E8F0;min-width:130px">Location</th>
+        ${dayMeta.map(h => `
+          <th style="text-align:center;padding:8px 4px 10px;min-width:82px;border-bottom:2px solid ${h.isToday ? '#4338CA' : '#E2E8F0'};background:${h.isToday ? '#F5F3FF' : 'transparent'}">
+            <div style="font-size:11px;font-weight:700;color:${h.isToday ? '#4338CA' : h.isWeekend ? '#94A3B8' : '#374151'}">${h.weekday}</div>
+            <div style="font-size:11px;color:${h.isToday ? '#6366F1' : h.isWeekend ? '#CBD5E1' : '#94A3B8'}">${h.mmdd}</div>
+          </th>`).join('')}
+      </tr></thead>
+      <tbody>`;
 
-  // CM effort
-  const cm={};
-  recs.forEach(r=>{if(r.cm_captain)cm[r.cm_captain]=(cm[r.cm_captain]||0)+effortScore(r);});
-  const cmS=Object.entries(cm).sort((a,b)=>b[1]-a[1]).slice(0,12);
-  if(charts.cm)charts.cm.destroy();
-  const c2=document.getElementById('ch-cm');
-  if(c2)charts.cm=new Chart(c2,{type:'bar',data:{labels:cmS.map(([k])=>k),datasets:[{data:cmS.map(([,v])=>Math.round(v)),backgroundColor:cmS.map(([,v],i)=>COLORS[i%COLORS.length]),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} effort pts`}}},scales:{x:{beginAtZero:true,title:{display:true,text:'Effort Points',font:{size:10}}}}}});
-
-  // Site
-  const si={};recs.forEach(r=>{if(r.site)si[r.site]=(si[r.site]||0)+1;});
-  const siS=Object.entries(si).sort((a,b)=>b[1]-a[1]);
-  if(charts.site)charts.site.destroy();
-  const c3=document.getElementById('ch-site');
-  if(c3)charts.site=new Chart(c3,{type:'bar',data:{labels:siS.map(([k])=>k),datasets:[{data:siS.map(([,v])=>v),backgroundColor:COLORS,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true},x:{ticks:{maxRotation:35}}}}});
-
-  // Status
-  const st={};recs.forEach(r=>{const s=r.status||'Unknown';st[s]=(st[s]||0)+1;});
-  const stS=Object.entries(st).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  if(charts.status)charts.status.destroy();
-  const c4=document.getElementById('ch-status');
-  if(c4)charts.status=new Chart(c4,{type:'doughnut',data:{labels:stS.map(([k])=>k),datasets:[{data:stS.map(([,v])=>v),backgroundColor:COLORS}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{boxWidth:11,font:{size:10}}}}}});
-}
-
-function updateHeatmap(recs){
-  const wrap=document.getElementById('heatmap-wrap');if(!wrap)return;
-  const today=todayStr();
-  const days=Array.from({length:42},(_,i)=>addDays(today,i));
-  const cms=[...new Set(recs.map(r=>r.cm_captain).filter(Boolean))].sort().slice(0,10);
-  if(!cms.length){
-    wrap.innerHTML='<div class="text-muted" style="text-align:center;padding:16px">Map "CM Captain / Lead" field to see capacity heatmap</div>';
-    return;
-  }
-  // Build effort per CM per day
-  const effort={};
-  cms.forEach(c=>{effort[c]={};});
-  recs.forEach(r=>{
-    if(!r.cm_captain||!r.date||!effort[r.cm_captain])return;
-    effort[r.cm_captain][r.date]=(effort[r.cm_captain][r.date]||0)+effortScore(r);
-  });
-
-  const cols=`160px repeat(${days.length},24px)`;
-  // Header
-  let h=`<div style="display:grid;grid-template-columns:${cols};gap:2px;margin-bottom:3px"><div></div>`;
-  days.forEach(d=>{const dt=new Date(d+'T12:00:00');const isWeekend=dt.getDay()===0||dt.getDay()===6;h+=`<div style="font-size:9px;color:${isWeekend?'#CBD5E1':'#94A3B8'};text-align:center">${dt.getMonth()+1}/${dt.getDate()}</div>`;});
-  h+='</div>';
-
-  cms.forEach(cm=>{
-    h+=`<div style="display:grid;grid-template-columns:${cols};gap:2px;margin-bottom:2px;align-items:center">`;
-    h+=`<div style="font-size:11px;color:#374151;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px">${cm}</div>`;
-    days.forEach(d=>{
-      const pts=effort[cm][d]||0;
-      const pct=dayCapacityPct(pts);
-      const cls=capClass(pct);
-      const lbl=pct>=cap.baseline?`${pct}%`:'';
-      const isWeekend=new Date(d+'T12:00:00').getDay()===0||new Date(d+'T12:00:00').getDay()===6;
-      h+=`<div class="cap-cell ${cls}" style="${isWeekend&&pct===0?'opacity:.4':''}" title="${cm}: ${pct}% capacity on ${d} (${Math.round(pts)} effort pts, ${lbl||'baseline only'})">${lbl}</div>`;
+  locations.forEach((loc, idx) => {
+    html += `<tr style="background:${idx%2===0?'#FAFAFA':'#FFFFFF'}">`;
+    const weekRecs = siteWeekCounts[loc] || 0;
+    const weekRecLabel = hasData
+      ? (weekRecs > 0
+          ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px">${weekRecs} activit${weekRecs===1?'y':'ies'} this week</div>`
+          : `<div style="font-size:10px;color:#94A3B8;font-style:italic;margin-top:1px">no data uploaded for this week</div>`)
+      : '';
+    html += `<td style="padding:10px 14px;border-bottom:1px solid #F1F5F9">
+      <div style="font-size:13px;font-weight:600;color:#1E293B;white-space:nowrap">${escapeHtml(loc)}</div>
+      ${weekRecLabel}
+    </td>`;
+    dayMeta.forEach(h => {
+      const row = stats[loc]?.[h.d];
+      const tdStyle = `padding:6px 4px;border-bottom:1px solid #F1F5F9;text-align:center;${h.isToday ? 'background:#F5F3FF;' : ''}`;
+      const hasActivity = row && (row.meetings || row.events || row.travelers);
+      if (!hasActivity) {
+        const inner = hasData
+          ? `<span style="font-size:12px;color:#CBD5E1;font-weight:500">—</span>`
+          : '';
+        html += `<td style="${tdStyle}">${inner}</td>`;
+        return;
+      }
+      const status = row.flags?.status || riskStatus(row.util, false);
+      const c = C[status] || C.normal;
+      const utilPct = Math.round(row.util * 100);
+      const cap = dailyCapacity(loc);
+      const cmCount = rawCMCountForSite(loc);
+      const vsTypical = row.util / MODEL.thrElevated;
+      const parts = [];
+      if (row.events)    parts.push(`${row.events} event${row.events>1?'s':''}`);
+      if (row.meetings)  parts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
+      if (row.travelers) parts.push(`${row.travelers} traveler${row.travelers>1?'s':''}`);
+      const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% utilized · ${parts.join(' · ')}${cap ? ` · Capacity ${cap.toFixed(1)}` : ''} · ${vsTypical.toFixed(1)}× busier than usual`);
+      const driverParts = [];
+      if (row.events)    driverParts.push(`${row.events} event${row.events>1?'s':''}`);
+      if (row.meetings)  driverParts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
+      if (row.travelers) driverParts.push(`${row.travelers} traveler${row.travelers>1?'s':''}`);
+      if (cmCount)       driverParts.push(`${cmCount} mgr${cmCount>1?'s':''}`);
+      const driverStr = driverParts.slice(0, 3).join(' · ');
+      const vsStr = status !== 'normal' ? `${vsTypical.toFixed(1)}× busier than usual` : null;
+      html += `<td style="${tdStyle}" title="${tip}">
+        <div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;background:${c.bg};border:1px solid ${c.border};border-radius:6px;padding:6px 7px;min-width:74px">
+          <span style="font-size:14px;font-weight:700;color:${c.text};line-height:1">${utilPct}%</span>
+          <span style="font-size:9px;font-weight:700;color:${c.text};opacity:.85;line-height:1;text-transform:uppercase;letter-spacing:.05em">${c.label}</span>
+          ${driverStr ? `<span style="font-size:9px;color:${c.text};opacity:.7;line-height:1;margin-top:1px;white-space:nowrap">${escapeHtml(driverStr)}</span>` : ''}
+          ${vsStr ? `<span style="font-size:9px;color:${c.text};opacity:.65;line-height:1;font-style:italic">${escapeHtml(vsStr)}</span>` : ''}
+        </div>
+      </td>`;
     });
-    h+='</div>';
+    html += `</tr>`;
   });
 
-  // Legend
-  h+=`<div class="cap-legend">
-    <span style="font-size:11px;color:#64748B;font-weight:600">Capacity:</span>
-    ${[['cap-0','0%','Not tracked'],['cap-1','1–25%','Light (baseline)'],['cap-2','26–60%','Moderate'],['cap-3','61–85%','Busy'],['cap-4','86–100%','Full'],['cap-5','>100%','Overloaded!']].map(([cls,range,lbl])=>`
-    <div style="display:flex;align-items:center;gap:4px">
-      <div class="cap-cell ${cls}" style="width:24px;height:14px;font-size:0;border-radius:3px"></div>
-      <span style="font-size:10px;color:#64748B">${range} <span style="color:#94A3B8">${lbl}</span></span>
-    </div>`).join('')}
+  html += `</tbody></table></div>
+  <div style="display:flex;gap:16px;margin-top:14px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0">
+    <span style="font-size:11px;color:#64748B;font-weight:700">How to read this:</span>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Green</b> — team has capacity to spare</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Amber</b> — team is stretched, monitor closely</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Red</b> — at or over capacity, consider adding support</span></div>
+    <span style="font-size:11px;color:#94A3B8;border-left:1px solid #E2E8F0;padding-left:12px">Each cell shows: utilization % · what's driving load · how many Community Managers are on-site. Hover any cell for full details.</span>
   </div>`;
-  wrap.innerHTML=h;
+
+  return { html, weekCounts, peakSite };
 }
 
-function stsCls(s){if(!s)return's-other';const sl=s.toLowerCase();if(sl.includes('confirm'))return's-confirmed';if(sl.includes('cancel'))return's-canceled';if(sl.includes('pend')||sl.includes('approv'))return's-pending';return's-other';}
+function renderOverview(recs) {
+  const mtg = recs.filter(r => r._type === 'meeting').length;
+  const evt = recs.filter(r => r._type === 'event').length;
+  const rsv = recs.filter(r => r._type === 'space' || r._type === 'traveler').length;
 
-function effortColor(pct){if(pct<26)return'#10B981';if(pct<61)return'#F59E0B';if(pct<86)return'#EF4444';return'#7F1D1D';}
+  const stats = buildSiteDayStats(recs);
+  const { html: weekGridHtml, weekCounts, peakSite } = renderWeekAheadGrid(recs, stats);
 
-function updateTable(recs){
-  const sorted=[...recs].filter(r=>r.date).sort((a,b)=>a.date<b.date?-1:1);
-  const tbody=document.getElementById('tbl-body');if(!tbody)return;
-  document.getElementById('tbl-count').textContent=`${sorted.length.toLocaleString()} records`;
-  if(!sorted.length){tbody.innerHTML='<tr><td colspan="9" class="empty-state">No records match filters</td></tr>';return;}
-  const ti=r=>RECORD_TYPES.find(x=>x.value===r._type)||RECORD_TYPES[0];
-  tbody.innerHTML=sorted.slice(0,500).map(r=>{
-    const dd=new Date(r.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-    const eff=Math.round(effortScore(r));
-    const pct=Math.min(Math.round((eff/cap.maxPts)*100),150);
-    const bw=Math.min(pct,100);
+  document.getElementById('tab-panel').innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card" data-tone="rose">
+        <div class="summary-label">Needs Support</div>
+        <div class="summary-value">${weekCounts.high}</div>
+        <div class="summary-sub">location${weekCounts.high !== 1 ? 's' : ''} at max capacity this week</div>
+      </div>
+      <div class="summary-card" data-tone="amber">
+        <div class="summary-label">Monitor</div>
+        <div class="summary-value">${weekCounts.elevated}</div>
+        <div class="summary-sub">location${weekCounts.elevated !== 1 ? 's' : ''} running stretched</div>
+      </div>
+      <div class="summary-card" data-tone="teal">
+        <div class="summary-label">In the Clear</div>
+        <div class="summary-value">${weekCounts.ok}</div>
+        <div class="summary-sub">location${weekCounts.ok !== 1 ? 's' : ''} with room to spare</div>
+      </div>
+      <div class="summary-card" data-tone="indigo">
+        <div class="summary-label">Most Active Site</div>
+        <div class="summary-value" style="font-size:${peakSite ? '15px' : '28px'};line-height:1.3">${peakSite ? escapeHtml(peakSite.loc) : '—'}</div>
+        <div class="summary-sub">${peakSite ? `Peak: ${peakSite.weekday} ${peakSite.mmdd} at ${Math.round(peakSite.util * 100)}%` : 'no activity this week'}</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Week Ahead — Team Capacity by Location</div>
+          <div class="text-muted" style="margin-top:2px">How loaded is each Community Manager team today through the next 7 days? Hover any cell for a full activity breakdown.</div>
+        </div>
+      </div>
+      <div class="card-body" style="padding:16px 16px 12px">${weekGridHtml}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Location Busyness — Next 6 Weeks</div>
+          <div class="text-muted" style="margin-top:2px">Each cell represents the total activities (meetings, events, travelers) at that location on that day — darker means busier. Hover any cell for a breakdown.</div>
+        </div>
+        ${REF() ? `<select id="heatmap-mode" onchange="setHeatmapMode(this.value)" style="width:auto;max-width:280px;font-size:11px">
+          <option value="count"${heatmapMode==='count'?' selected':''}>Show: Total activities</option>
+          <option value="pct_primary_seats"${heatmapMode==='pct_primary_seats'?' selected':''}>Show: % of seat capacity</option>
+          <option value="pct_expected_usage"${heatmapMode==='pct_expected_usage'?' selected':''}>Show: % of expected daily traffic</option>
+          <option value="vs_tt_baseline"${heatmapMode==='vs_tt_baseline'?' selected':''}>Show: % vs. Tue–Thu badge baseline</option>
+        </select>` : ''}
+      </div>
+      <div class="card-body" id="heatmap-wrap" style="overflow-x:auto"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Capacity Model Settings</div>
+          <div class="text-muted" style="margin-top:2px">Adjust assumptions to match your team's actual workload</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn btn-sm btn-secondary" onclick="modelControlsOpen=!modelControlsOpen;document.getElementById('model-controls-body').classList.toggle('hidden',!modelControlsOpen)">How is capacity calculated? ▾</button>
+          <button class="btn btn-sm btn-secondary" onclick="resetModel()">Reset to defaults</button>
+        </div>
+      </div>
+      <div id="model-controls-body" ${modelControlsOpen ? '' : 'class="hidden"'}>
+        <div class="card-body" style="padding:16px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px">
+            <div>
+              <div class="filter-label" style="margin-bottom:8px">Community Manager Availability</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="range" min="50" max="100" step="1" value="${Math.round(MODEL.ptoFactor*100)}" oninput="document.getElementById('pto-val').textContent=this.value+'%'" onchange="setModel('ptoFactor', this.value/100)" style="flex:1">
+                <span id="pto-val" style="font-weight:700;min-width:36px;text-align:right">${Math.round(MODEL.ptoFactor*100)}%</span>
+              </div>
+              <div class="text-muted" style="margin-top:6px">Fraction of Community Managers available on a typical day (accounts for PTO, sick time, training)</div>
+            </div>
+            <div>
+              <div class="filter-label" style="margin-bottom:8px">Baseline Daily Load %</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="range" min="0" max="60" step="5" value="${MODEL.baselineLoad}" oninput="document.getElementById('baseline-val').textContent=this.value+'%'" onchange="setModel('baselineLoad', +this.value)" style="flex:1">
+                <span id="baseline-val" style="font-weight:700;min-width:36px;text-align:right">${MODEL.baselineLoad}%</span>
+              </div>
+              <div class="text-muted" style="margin-top:6px">Minimum utilization every site-day — even with zero bookings, CMs are doing site walks, supply checks, building tours, ad-hoc associate requests, and more. A site with 0 meetings is <em>not</em> at 0% capacity.</div>
+            </div>
+            <div>
+              <div class="filter-label" style="margin-bottom:8px">Daily Capacity per Community Manager</div>
+              <input type="number" min="1" max="20" step="1" value="${MODEL.meetingEqPerDay}" onchange="setModel('meetingEqPerDay', this.value)" style="width:72px">
+              <div class="text-muted" style="margin-top:6px">How many meeting-equivalent tasks one Community Manager can comfortably handle per day</div>
+            </div>
+            <div>
+              <div class="filter-label" style="margin-bottom:8px">Risk Thresholds</div>
+              <div style="display:flex;gap:16px;align-items:flex-end">
+                <div>
+                  <div class="text-muted" style="font-size:11px;margin-bottom:4px">Amber "Busy" threshold ≥</div>
+                  <input type="number" min="0.2" max="0.95" step="0.05" value="${MODEL.thrElevated}" onchange="setModel('thrElevated', this.value)" style="width:68px">
+                </div>
+                <div>
+                  <div class="text-muted" style="font-size:11px;margin-bottom:4px">Red "High" threshold ≥</div>
+                  <input type="number" min="0.3" max="2" step="0.05" value="${MODEL.thrHigh}" onchange="setModel('thrHigh', this.value)" style="width:68px">
+                </div>
+              </div>
+              <div class="text-muted" style="margin-top:6px">Utilization = Load ÷ Capacity</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid #F1F5F9;margin-top:4px;padding:16px">
+          <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">How Capacity is Calculated</div>
+          <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:13px;color:#374151;line-height:1.65">
+            Each location has a fixed number of Community Managers on staff. To estimate how busy they are on a given day, this model (1) calculates their <b>available capacity</b> based on staffing and typical availability, then (2) measures the <b>demand placed on them</b> by weighting each type of activity — events take far more time than a simple meeting, while VIP visitors require white-glove attention. Dividing demand by capacity gives a <b>utilization percentage</b> — the number shown in each cell. A <b>baseline daily load</b> (default ${MODEL.baselineLoad}%) is applied as a floor — even a site with zero bookings is never shown at 0%, because CMs always have routine responsibilities: site walks, supply checks, associate drop-ins, building tours, and more. Adjust the weights and baseline below to match your team's actual workload.
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px">
+
+            <div>
+              <div style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Step 1 — Available Capacity per Location</div>
+              <div style="font-size:12px;color:#374151;line-height:1.6;margin-bottom:10px">
+                <code style="background:#F1F5F9;padding:2px 6px;border-radius:4px;font-size:11px">Capacity = Community Managers × ${Math.round(MODEL.ptoFactor*100)}% availability × ${MODEL.meetingEqPerDay} tasks/day</code>
+              </div>
+              ${REF() ? `<table style="width:100%;border-collapse:collapse;font-size:12px">
+                <thead><tr>
+                  <th style="text-align:left;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Location</th>
+                  <th style="text-align:right;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Total CMs</th>
+                  <th style="text-align:right;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Available CMs</th>
+                  <th style="text-align:right;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Daily Capacity</th>
+                </tr></thead>
+                <tbody>
+                  ${REF().sites.map((s,i) => {
+                    const raw = rawCMCountForSite(s.siteName);
+                    const eff = (raw * MODEL.ptoFactor).toFixed(1);
+                    const cap = (raw * MODEL.ptoFactor * MODEL.meetingEqPerDay).toFixed(1);
+                    return `<tr style="background:${i%2===0?'#FAFAFA':'#FFF'}">
+                      <td style="padding:4px 8px;color:#1E293B;font-weight:500">${escapeHtml(s.siteName)}</td>
+                      <td style="padding:4px 8px;text-align:right;color:#475569">${raw}</td>
+                      <td style="padding:4px 8px;text-align:right;color:#475569">${eff}</td>
+                      <td style="padding:4px 8px;text-align:right;font-weight:700;color:#1E293B">${cap}</td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>` : '<div class="text-muted">Reference data not loaded.</div>'}
+            </div>
+
+            <div>
+              <div style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Step 2 — Daily Demand (Load)</div>
+              <div style="font-size:12px;color:#374151;line-height:1.6;margin-bottom:12px">
+                Not all activities are equal — a large event requires much more from the team than a routine meeting room booking. Each activity type has a <b>task weight</b> that reflects the typical hours of preparation and support required:
+              </div>
+              <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px">
+                <thead><tr>
+                  <th style="text-align:left;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Activity</th>
+                  <th style="text-align:center;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Tasks</th>
+                  <th style="text-align:left;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">What it covers</th>
+                </tr></thead>
+                <tbody>
+                  <tr style="background:#FAFAFA">
+                    <td style="padding:5px 8px;font-weight:500;color:#1E293B">1 Event</td>
+                    <td style="padding:4px 8px;text-align:center"><input type="number" min="0" max="20" step="0.5" value="${MODEL.wEvent}" onchange="setModel('wEvent',this.value)" style="width:56px;text-align:center;font-weight:700"></td>
+                    <td style="padding:5px 8px;color:#64748B">Setup, execution, vendor coordination, catering oversight</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:5px 8px;font-weight:500;color:#1E293B">1 Meeting</td>
+                    <td style="padding:4px 8px;text-align:center"><input type="number" min="0" max="20" step="0.5" value="${MODEL.wMeeting}" onchange="setModel('wMeeting',this.value)" style="width:56px;text-align:center;font-weight:700"></td>
+                    <td style="padding:5px 8px;color:#64748B">Room support, AV, materials</td>
+                  </tr>
+                  <tr style="background:#FAFAFA">
+                    <td style="padding:5px 8px;font-weight:500;color:#1E293B">1 VIP visitor</td>
+                    <td style="padding:4px 8px;text-align:center"><input type="number" min="0" max="20" step="0.5" value="${MODEL.wVip}" onchange="setModel('wVip',this.value)" style="width:56px;text-align:center;font-weight:700"></td>
+                    <td style="padding:5px 8px;color:#64748B">White-glove service, escorting, special requests</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:5px 8px;font-weight:500;color:#1E293B">1 Traveler</td>
+                    <td style="padding:4px 8px;text-align:center"><input type="number" min="0" max="20" step="0.5" value="${MODEL.wTraveler}" onchange="setModel('wTraveler',this.value)" style="width:56px;text-align:center;font-weight:700"></td>
+                    <td style="padding:5px 8px;color:#64748B">Workspace, badge access, orientation</td>
+                  </tr>
+                  <tr style="background:#FAFAFA">
+                    <td style="padding:5px 8px;font-weight:500;color:#1E293B">Catering item</td>
+                    <td style="padding:4px 8px;text-align:center"><input type="number" min="0" max="20" step="0.5" value="${MODEL.wCatering}" onchange="setModel('wCatering',this.value)" style="width:56px;text-align:center;font-weight:700"></td>
+                    <td style="padding:5px 8px;color:#64748B">Vendor coordination, delivery, setup/cleanup</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Step 3 — Utilization &amp; Risk Level</div>
+              <div style="font-size:12px;color:#374151;line-height:1.6;margin-bottom:10px">
+                Divide total demand by available capacity to get a <b>utilization %</b> — the number shown in each grid cell. At 100%, the team is fully loaded. Over 100% means activity has exceeded team bandwidth for that day.
+                <div style="margin-top:6px"><code style="background:#F1F5F9;padding:2px 6px;border-radius:4px;font-size:11px">Utilization % = Total Demand ÷ Available Capacity</code></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px">
+                  <span style="font-size:12px;font-weight:700;color:#065F46;min-width:48px">&lt;${Math.round(MODEL.thrElevated*100)}%</span>
+                  <div><div style="font-size:12px;color:#065F46;font-weight:700">🟢 In the Clear</div><div style="font-size:11px;color:#6EE7B7;margin-top:1px">Team has capacity to spare — normal operations</div></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px">
+                  <span style="font-size:12px;font-weight:700;color:#92400E;min-width:48px">${Math.round(MODEL.thrElevated*100)}–${Math.round(MODEL.thrHigh*100)}%</span>
+                  <div><div style="font-size:12px;color:#92400E;font-weight:700">🟡 Monitor Closely</div><div style="font-size:11px;color:#D97706;margin-top:1px">Team is stretched — watch for additional requests</div></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px">
+                  <span style="font-size:12px;font-weight:700;color:#991B1B;min-width:48px">&gt;${Math.round(MODEL.thrHigh*100)}%</span>
+                  <div><div style="font-size:12px;color:#991B1B;font-weight:700">🔴 Consider Support</div><div style="font-size:11px;color:#F87171;margin-top:1px">Activity exceeds team bandwidth — leadership action may be needed</div></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  updateHeatmap(recs);
+}
+function nextNDayDigest(recs, n) {
+  const today = todayStr();
+  const days = Array.from({length:n},(_,i)=>addDays(today,i));
+  const buckets = {};
+  days.forEach(d => buckets[d] = { meeting:0, event:0, space:0, traveler:0 });
+  let total = 0;
+  recs.forEach(r => { if (r.date && buckets[r.date]) { buckets[r.date][r._type] = (buckets[r.date][r._type]||0)+1; total++; } });
+  const rows = days.map(d => {
+    const dt = new Date(d+'T12:00:00');
+    const label = `${dt.toLocaleString('default',{weekday:'short'})} ${dt.getMonth()+1}/${dt.getDate()}`;
+    const b = buckets[d];
+    const sum = b.meeting + b.event + b.space + b.traveler;
     return `<tr>
-      <td style="white-space:nowrap;font-weight:600">${dd}</td>
-      <td>${r.site||'—'}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.event_name||'').replace(/"/g,'&quot;')}">${r.event_name||'—'}</td>
-      <td>${r.cm_captain||'—'}</td>
-      <td style="text-align:right">${r.attendees>0?r.attendees.toLocaleString():'—'}</td>
-      <td><div style="display:flex;align-items:center;gap:6px">
-        <div class="effort-bar-wrap"><div class="effort-bar" style="width:${bw}%;background:${effortColor(pct)}"></div></div>
-        <span style="font-size:11px;color:#64748B">${eff}pts</span>
-      </div></td>
-      <td><span class="status-badge ${stsCls(r.status)}">${r.status||'—'}</span></td>
-      <td><span class="badge ${ti(r).badge}">${ti(r).label}</span></td>
-      <td style="white-space:nowrap">${r.time||'—'}</td>
+      <td style="font-weight:600">${label}</td>
+      <td style="text-align:right">${b.meeting||'—'}</td>
+      <td style="text-align:right">${b.event||'—'}</td>
+      <td style="text-align:right">${b.space||'—'}</td>
+      <td style="text-align:right">${b.traveler||'—'}</td>
+      <td style="text-align:right;font-weight:700;color:${sum?'#1E293B':'#CBD5E1'}">${sum||'—'}</td>
     </tr>`;
   }).join('');
-  if(sorted.length>500) tbody.innerHTML+=`<tr><td colspan="9" style="text-align:center;padding:12px;color:#94A3B8;font-size:11px">Showing first 500 of ${sorted.length.toLocaleString()} · use filters to narrow</td></tr>`;
+  return { total, html: `<table class="upcoming-table">
+    <thead><tr><th>Day</th><th style="text-align:right">Meetings</th><th style="text-align:right">Events</th><th style="text-align:right">PulsePoint Spaces Reservations</th><th style="text-align:right">VIP Travelers</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>` };
 }
 
-function exportCSV(){
+// Map AMENITY_TYPE / event_type values from Pulse Point Space Report onto the
+// three reservable capacity buckets in the master reference. Lowercased compare.
+const AMENITY_BUCKETS = {
+  workstation:    'workstations',
+  'staff vp office': 'privateOffices',
+  'vp office':    'privateOffices',
+  office:         'privateOffices',
+  'private office':'privateOffices',
+  capsule:        'capsules',
+};
+function amenityBucket(r) {
+  const t = (r.event_type || '').toLowerCase().trim();
+  if (!t) return null;
+  if (AMENITY_BUCKETS[t]) return AMENITY_BUCKETS[t];
+  if (t.includes('workstation')) return 'workstations';
+  if (t.includes('office'))      return 'privateOffices';
+  if (t.includes('capsule'))     return 'capsules';
+  return null;
+}
+const BUCKET_LABEL = { workstations:'Workstations', privateOffices:'Private Offices', capsules:'Capsules' };
+
+function fmtMoney(n) {
+  if (!n) return '—';
+  if (n >= 1000000) return `$${(n/1000000).toFixed(n>=10000000?0:1)}M`;
+  if (n >= 1000) return `$${(n/1000).toFixed(n>=100000?0:1)}K`;
+  return `$${Math.round(n).toLocaleString()}`;
+}
+function hasVip(r) { return !!(r.vip && String(r.vip).trim() && !/^(no|n|false|0)$/i.test(String(r.vip).trim())); }
+
+function renderWorkspace(recs) {
+  const space = recs.filter(r => r._type === 'space');
+  const trv = recs.filter(r => r._type === 'traveler');
+  const days = Math.max(1, daysInRange());
+  const overallUtil = computeUtilization(recs);
+  const dailyGrid = buildDailyCapacityGrid(space);
+  const topRow = [...dailyGrid].sort((a,b) => b.totalReserved - a.totalReserved)[0];
+
+  document.getElementById('tab-panel').innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card" data-tone="indigo"><div class="summary-label">Total Reservations</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">${space.length.toLocaleString()} workspace · ${trv.length.toLocaleString()} traveler</div></div>
+      <div class="summary-card" data-tone="emerald"><div class="summary-label">Average Daily Occupancy</div><div class="summary-value">${overallUtil.display}</div><div class="summary-sub">${overallUtil.sub}</div></div>
+      <div class="summary-card" data-tone="teal"><div class="summary-label">Traveler Arrivals</div><div class="summary-value">${trv.length.toLocaleString()}</div><div class="summary-sub">incoming in range</div></div>
+      <div class="summary-card" data-tone="amber"><div class="summary-label">Peak Day</div><div class="summary-value" style="font-size:16px;line-height:1.2">${topRow?escapeHtml(topRow.site):'—'}</div><div class="summary-sub">${topRow?escapeHtml(topRow.date)+' · '+topRow.totalReserved.toLocaleString()+' reservations':'no data'}</div></div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">Daily Reservations by Location and Space Type</div>
+        <div class="text-muted">${dailyGrid.length.toLocaleString()} rows · ${days} day${days===1?'':'s'} in range · click any column to sort</div>
+      </div>
+      <div style="max-height:640px;overflow-y:auto">${renderDailyCapacityTable(dailyGrid)}</div>
+    </div>
+    ${renderVipTravelersCard(trv)}
+    <div class="card">
+      <div class="card-header"><div class="card-title">Upcoming Reservations</div><div class="text-muted">${recs.length.toLocaleString()} records · click any column to sort</div></div>
+      <div style="max-height:560px;overflow-y:auto">${renderSortableTable('workspace', recs, [
+        { label:'Date',             get:r=>r.date,        cell:fmtDateCell },
+        { label:'Location',         get:r=>r._canonicalSite||r.site||'' },
+        { label:'State',            get:r=>r._state||'' },
+        { label:'Reservation Type', get:r=>r._type,       cell:r=>{ const t=RECORD_TYPES.find(x=>x.value===r._type); return `<span class="badge ${t?.badge||'badge-meeting'}">${escapeHtml(t?.label||r._type||'')}</span>`; } },
+        { label:'Space / Amenity',  get:r=>r.event_type||'', cell:r=>r.event_type?escapeHtml(r.event_type):'—' },
+        { label:'Person',           get:r=>r.event_name||r.room||'', cell:r=>`<div style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||r.room||'')}">${escapeHtml(r.event_name||r.room||'—')}</div>` },
+        { label:'Room',             get:r=>r.room||'' },
+        { label:'Community Manager Lead', get:r=>r.cm_captain||'' },
+        { label:'Status',           get:r=>r.status||'',  cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${escapeHtml(r.status)}</span>`:'—' },
+      ])}</div>
+    </div>`;
+}
+
+// Build a (site × day) grid of reservation counts split into the three reservable
+// buckets: workstations / private offices / capsules. Capacity denominators come
+// from the baked master reference (matched via Spaces Location ID / Site Name).
+// Excludes 'traveler' records — those are tracked separately on the table below.
+function buildDailyCapacityGrid(spaceRecs) {
+  const byKey = {}; // `${site}|${date}` → row
+  let unbucketed = 0;
+  spaceRecs.forEach(r => {
+    const site = r._canonicalSite || r.site;
+    if (!site || !r.date) return;
+    const bucket = amenityBucket(r);
+    const key = site + '|' + r.date;
+    const row = byKey[key] || (byKey[key] = {
+      site, date: r.date, state: r._state||'', regionalLeader: r._regionalLeader||'',
+      workstations:0, privateOffices:0, capsules:0, unbucketed:0, totalReserved:0,
+      capacity: r._capacity || null, _ref: !!r._canonicalSite,
+    });
+    if (bucket) row[bucket]++; else { row.unbucketed++; unbucketed++; }
+    row.totalReserved++;
+  });
+  const list = Object.values(byKey);
+  // Attach capacity from reference even if records had no _capacity
+  list.forEach(row => {
+    if (row.capacity) return;
+    const ref = REF()?.bySiteName?.[row.site.toLowerCase()];
+    if (ref) { row.capacity = ref.capacity; row.state = row.state || ref.state; row.regionalLeader = row.regionalLeader || ref.regionalLeader; row._ref = true; }
+  });
+  // default sort: date ascending, then site
+  list.sort((a,b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.site.localeCompare(b.site));
+  return list;
+}
+
+function renderVipTravelersCard(travelers) {
+  // Per spec: every traveler in the Travelers file is treated as a VIP.
+  const vips = travelers;
+  return `<div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+      <div class="card-title">VIP Travelers</div>
+      <div class="text-muted">${vips.length.toLocaleString()} VIP arrival${vips.length===1?'':'s'} in range</div>
+    </div>
+    <div style="max-height:360px;overflow-y:auto">${
+      vips.length ? renderSortableTable('vipTravelers', vips, [
+        { label:'Name',         get:r=>r.event_name||r.vip||'', cell:r=>`<div style="font-weight:600">${escapeHtml(r.event_name||r.vip||'—')}</div>` },
+        { label:'Location',     get:r=>r._canonicalSite||r.site||'', cell:r=>escapeHtml(r._canonicalSite||r.site||'—') },
+        { label:'Arrival Date', get:r=>r.date, cell:fmtDateCell },
+      ]) : '<div class="empty-state">No travelers in range. Upload a Travelers file to populate.</div>'
+    }</div>
+  </div>`;
+}
+
+function renderDailyCapacityTable(rows) {
+  if (!rows.length) return '<div class="empty-state">No workspace reservations in range. Map a column to <b>Location</b> (LOCATION_ID or site name) and <b>Event Type</b> (AMENITY_TYPE) to populate this grid.</div>';
+  const pctBadge = (used, cap) => {
+    if (!cap || cap <= 0) return '<span class="text-muted">—</span>';
+    const pct = (used / cap) * 100;
+    const cls = pct >= 90 ? 'status-canceled' : pct >= 60 ? 'status-pending' : pct > 0 ? 'status-confirmed' : 'status-other';
+    return `<span class="status-badge ${cls}">${pct.toFixed(pct<10?1:0)}%</span>`;
+  };
+  const cell = (used, cap) => {
+    if (!cap || cap <= 0) return `<div style="text-align:right">${used.toLocaleString()} <span class="text-muted">/ —</span></div>`;
+    return `<div style="text-align:right">${used.toLocaleString()} <span class="text-muted">/ ${cap.toLocaleString()}</span> ${pctBadge(used, cap)}</div>`;
+  };
+  const columns = [
+    { label:'Date',             get:r=>r.date, cell:r=>fmtDateCell(r) },
+    { label:'Location',         get:r=>r.site, cell:r=>`<div style="font-weight:600">${escapeHtml(r.site||'—')}</div>` },
+    { label:'State',            get:r=>r.state||'', cell:r=>escapeHtml(r.state||'—') },
+    { label:'Workstations',     get:r=>r.workstations,    cell:r=>cell(r.workstations,    r.capacity?.workstations) },
+    { label:'Private Offices',  get:r=>r.privateOffices,  cell:r=>cell(r.privateOffices,  r.capacity?.privateOffices) },
+    { label:'Capsules',         get:r=>r.capsules,        cell:r=>cell(r.capsules,        r.capacity?.capsules) },
+    { label:'Total Reservations', get:r=>r.totalReserved, cell:r=>`<div style="text-align:right;font-weight:700">${r.totalReserved.toLocaleString()}</div>` },
+  ];
+  return renderSortableTable('wsDaily', rows, columns);
+}
+
+function renderMeetings(recs) {
+  const att = recs.reduce((s,r)=>s+(r.attendees||0),0);
+  const avgAtt = recs.length ? att / recs.length : 0;
+  const cmCounts = countBy(recs, 'cm_captain');
+  const topCMs = Object.entries(cmCounts).sort((a,b)=>b[1]-a[1]);
+  const topCM = topCMs[0];
+  const vipMtgs = recs.filter(hasVip).length;
+
+  document.getElementById('tab-panel').innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card" data-tone="indigo"><div class="summary-label">Total Meetings</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">in date range</div></div>
+      <div class="summary-card" data-tone="teal"><div class="summary-label">Total Attendees</div><div class="summary-value">${att.toLocaleString()}</div><div class="summary-sub">average ${avgAtt.toFixed(1)} per meeting</div></div>
+      <div class="summary-card" data-tone="amber"><div class="summary-label">VIP Meetings</div><div class="summary-value">${vipMtgs.toLocaleString()}</div><div class="summary-sub">${recs.length?Math.round(100*vipMtgs/recs.length)+'% of meetings':'no data'}</div></div>
+      <div class="summary-card" data-tone="emerald"><div class="summary-label">Most Active Community Manager</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topCM?escapeHtml(topCM[0]):'—'}</div><div class="summary-sub">${topCM?topCM[1].toLocaleString()+' meeting'+(topCM[1]===1?'':'s'):'no data'}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Meeting Log</div>
+        <div class="text-muted">${recs.length.toLocaleString()} meeting${recs.length===1?'':'s'} in selected date range · click any column header to sort</div>
+      </div>
+      <div style="max-height:720px;overflow-y:auto">${renderSortableTable('meetings', recs, [
+        { label:'Date',         get:r=>r.date, cell:fmtDateCell },
+        { label:'Time',         get:r=>r.time||'' },
+        { label:'Location',     get:r=>r._canonicalSite||r.site||'' },
+        { label:'Meeting Name', get:r=>r.event_name||'', cell:r=>`<div style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${escapeHtml(r.event_name||'—')}</div>` },
+        { label:'VIP Attendee', get:r=>r.vip||'', cell:r=>r.vip?`<span title="${escapeHtml(String(r.vip))}" style="font-weight:600;color:#92400E">${escapeHtml(String(r.vip).length>30?String(r.vip).slice(0,30)+'…':String(r.vip))}</span>`:'<span class="text-muted">—</span>' },
+        { label:'# Attendees',  get:r=>r.attendees||0, cell:r=>r.attendees>0?`<div style="text-align:right;font-weight:600">${r.attendees.toLocaleString()}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
+        { label:'Room',         get:r=>r.room||'', cell:r=>`<div style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.room||'')}">${escapeHtml(r.room||'—')}</div>` },
+        { label:'Community Manager Lead', get:r=>r.cm_captain||'' },
+        { label:'Status',       get:r=>r.status||'', cell:r=>r.status?`<span class="status-badge ${stsCls(r.status)}">${escapeHtml(r.status)}</span>`:'—' },
+      ])}</div>
+    </div>`;
+}
+
+function renderEvents(recs) {
+  const att = recs.reduce((s,r)=>s+(r.attendees||0),0);
+  const totalBudget = recs.reduce((s,r)=>s+(r.budget||0),0);
+  const eventsWithBudget = recs.filter(r => r.budget > 0).length;
+  const statusCounts = countBy(recs, r=>r.status||'Unknown');
+  const confirmed = Object.entries(statusCounts).filter(([k])=>/confirm/i.test(k)).reduce((s,[,v])=>s+v,0);
+  const pending = Object.entries(statusCounts).filter(([k])=>/pend|approv/i.test(k)).reduce((s,[,v])=>s+v,0);
+  const cmCounts = countBy(recs, 'cm_captain');
+  const topCMs = Object.entries(cmCounts).sort((a,b)=>b[1]-a[1]);
+  const topCM = topCMs[0];
+
+  // Compact location + status filter strip (replaces the hidden sidebar for this tab)
+  const allSites = getAllSiteNames();
+  const siteChips = allSites.map(s =>
+    `<span class="chip${filterState.sites.has(s)?' active':''}" onclick="toggleChip(this,'site','${jsString(s)}')">${escapeHtml(s)}</span>`
+  ).join('');
+  const allStatuses = [...new Set(state.records.filter(r=>r._type==='event').map(r=>r.status).filter(Boolean))].sort();
+  const statusChips = allStatuses.slice(0,12).map(s =>
+    `<span class="chip${filterState.statuses.has(s)?' active':''}" onclick="toggleChip(this,'status','${jsString(s)}')">${escapeHtml(s)}</span>`
+  ).join('');
+
+  document.getElementById('tab-panel').innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card" data-tone="rose"><div class="summary-label">Total Events</div><div class="summary-value">${recs.length.toLocaleString()}</div><div class="summary-sub">${confirmed.toLocaleString()} confirmed · ${pending.toLocaleString()} pending</div></div>
+      <div class="summary-card" data-tone="emerald"><div class="summary-label">Total Budget</div><div class="summary-value">${totalBudget>0?fmtMoney(totalBudget):'—'}</div><div class="summary-sub">${eventsWithBudget>0?eventsWithBudget.toLocaleString()+' events with budget':'map a Budget column to populate'}</div></div>
+      <div class="summary-card" data-tone="teal"><div class="summary-label">Total Attendees</div><div class="summary-value">${att.toLocaleString()}</div><div class="summary-sub">across events</div></div>
+      <div class="summary-card" data-tone="amber"><div class="summary-label">Most Active Community Manager</div><div class="summary-value" style="font-size:18px;line-height:1.2">${topCM?escapeHtml(topCM[0]):'—'}</div><div class="summary-sub">${topCM?topCM[1].toLocaleString()+' event'+(topCM[1]===1?'':'s') + ' led':'no data'}</div></div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">Location</span>
+        <span class="chip active" onclick="toggleChip(this,'site','all')">All</span>
+        ${siteChips}
+      </div>
+      ${allStatuses.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-left:1px solid #F1F5F9;padding-left:12px">
+        <span style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">Status</span>
+        <span class="chip active" onclick="toggleChip(this,'status','all')">All</span>
+        ${statusChips}
+      </div>` : ''}
+      <button class="btn btn-sm btn-secondary" style="margin-left:auto" onclick="clearFilters()">Clear</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Event Log</div>
+        <div class="text-muted">${recs.length.toLocaleString()} event${recs.length===1?'':'s'} in selected date range · click any column header to sort</div>
+      </div>
+      <div style="overflow-x:auto;max-height:800px;overflow-y:auto">${renderSortableTable('events', recs, [
+        { label:'Date',           get:r=>r.date,           cell:fmtDateCell },
+        { label:'Time',           get:r=>r.time||'' },
+        { label:'Location',       get:r=>r._canonicalSite||r.site||'' },
+        { label:'Event Name',     get:r=>r.event_name||'', cell:r=>`<div style="min-width:160px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.event_name||'')}">${escapeHtml(r.event_name||'—')}</div>` },
+        { label:'The Why',        get:r=>r.why||'',        cell:r=>r.why?`<div title="${escapeHtml(r.why)}" style="min-width:200px;max-width:300px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45;font-size:12px;color:#374151">${escapeHtml(r.why)}</div>`:'<span class="text-muted">—</span>' },
+        { label:'Est. Budget',    get:r=>r.budget||0,      cell:r=>r.budget>0?`<div style="text-align:right;font-weight:600;color:#065F46;white-space:nowrap">${fmtMoney(r.budget)}</div>`:'<div style="text-align:right" class="text-muted">—</div>' },
+        { label:'Event Location', get:r=>r.room||'',       cell:r=>`<div style="min-width:120px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.room||'')}">${escapeHtml(r.room||'—')}</div>` },
+        { label:'Event Type',     get:r=>r.event_type||'', cell:r=>r.event_type?`<div style="white-space:nowrap">${escapeHtml(r.event_type)}</div>`:'<span class="text-muted">—</span>' },
+      ])}</div>
+    </div>`;
+}
+
+function daysInRange() {
+  const f = document.getElementById('f-from')?.value;
+  const t = document.getElementById('f-to')?.value;
+  if (!f || !t) return 90;
+  const ms = new Date(t+'T12:00:00') - new Date(f+'T12:00:00');
+  return Math.max(1, Math.round(ms / 86400000) + 1);
+}
+
+function computeUtilization(recs) {
+  // Avg over the date range: total reservations / (primary seats × days)
+  // Only count sites we have reference capacity for.
+  if (!REF()) return { display:'—', sub:'reference data not loaded' };
+  const days = daysInRange();
+  const perSite = {};
+  recs.forEach(r => { const s = r._canonicalSite || r.site; if (!s) return; perSite[s] = (perSite[s]||0)+1; });
+  let totalRsv = 0, totalCapDays = 0, sitesUsed = 0;
+  Object.entries(perSite).forEach(([s, count]) => {
+    const seats = REF().bySiteName[s.toLowerCase()]?.capacity?.primarySeats;
+    if (seats) { totalRsv += count; totalCapDays += seats * days; sitesUsed++; }
+  });
+  if (!totalCapDays) return { display:'—', sub:'no matching reference sites' };
+  const pct = (totalRsv / totalCapDays) * 100;
+  return { display: pct < 100 ? pct.toFixed(1)+'%' : Math.round(pct)+'%', sub: `${sitesUsed} site${sitesUsed===1?'':'s'} × ${days} day${days===1?'':'s'}` };
+}
+
+// ── SORTABLE TABLE ─────────────────────────────────────────────────────────
+function fmtDateCell(r) {
+  if (!r.date) return '—';
+  const d = new Date(r.date+'T12:00:00');
+  if (isNaN(d)) return r.date;
+  return `<div style="white-space:nowrap;font-weight:600">${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>`;
+}
+
+function renderSortableTable(tabId, records, columns) {
+  const st = tableSort[tabId] || (tableSort[tabId] = { col:0, dir:1 });
+  const sorted = [...records].sort((a,b) => {
+    const c = columns[st.col]; if (!c) return 0;
+    const va = c.get(a), vb = c.get(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * st.dir;
+    return String(va).localeCompare(String(vb)) * st.dir;
+  });
+  const head = columns.map((c,i) => `<th class="sortable-th${st.col===i?' sorted':''}" onclick="sortTable('${tabId}',${i})">${escapeHtml(c.label)}${st.col===i?(st.dir>0?' ▲':' ▼'):''}</th>`).join('');
+  if (!sorted.length) return `<table class="upcoming-table"><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${columns.length}" class="empty-state">No records match filters</td></tr></tbody></table>`;
+  // Default cell renderer escapes user-controlled values. Cells that need HTML
+  // (badges, formatted dates, money) supply their own pre-escaped `cell`.
+  const body = sorted.slice(0,500).map(r => `<tr>${columns.map(c => `<td>${c.cell ? c.cell(r) : escapeHtml(c.get(r) || '—')}</td>`).join('')}</tr>`).join('');
+  const more = sorted.length > 500 ? `<tr><td colspan="${columns.length}" style="text-align:center;padding:14px;color:#94A3B8;font-size:12px">Showing first 500 of ${sorted.length.toLocaleString()} — use filters to narrow</td></tr>` : '';
+  return `<table class="upcoming-table"><thead><tr>${head}</tr></thead><tbody>${body}${more}</tbody></table>`;
+}
+
+function sortTable(tabId, colIdx) {
+  const st = tableSort[tabId] || (tableSort[tabId] = { col:0, dir:1 });
+  if (st.col === colIdx) st.dir = -st.dir;
+  else { st.col = colIdx; st.dir = 1; }
+  refreshDash();
+}
+
+// Location Busyness heatmap. Rows are the 9 master locations, columns are 42 days.
+// Each cell aggregates every signal — meetings, events, VIP travelers, workspace
+// reservations — into a single busyness count for that (location, day).
+function updateHeatmap(recs) {
+  const wrap=document.getElementById('heatmap-wrap'); if(!wrap) return;
+  const today=todayStr();
+  const days=Array.from({length:42},(_,i)=>addDays(today,i));
+  // Anchor the row axis on the master reference so all 9 locations are always shown
+  // (even ones with zero records in the current filter). Falls back to any sites
+  // observed in the records if no reference is loaded.
+  const locations = REF()
+    ? REF().sites.map(s => s.siteName)
+    : [...new Set(recs.map(r => r._canonicalSite || r.site).filter(Boolean))].sort();
+  if (!locations.length) {
+    wrap.innerHTML = '<div class="text-muted" style="text-align:center;padding:16px">Upload data to populate location busyness</div>';
+    return;
+  }
+
+  // counts[location][date] = { total, meeting, event, traveler, space }
+  const counts={};
+  locations.forEach(loc => counts[loc] = {});
+  recs.forEach(r => {
+    const loc = r._canonicalSite || r.site;
+    if (!loc || !counts[loc] || !r.date) return;
+    if (!counts[loc][r.date]) counts[loc][r.date] = { total:0, meeting:0, event:0, traveler:0, space:0 };
+    counts[loc][r.date].total++;
+    const t = r._type || 'meeting';
+    counts[loc][r.date][t] = (counts[loc][r.date][t] || 0) + 1;
+  });
+
+  // Per-location denominator for the % modes — pulled directly from the master reference.
+  const denomFor = (loc) => {
+    const refSite = REF()?.bySiteName?.[loc.toLowerCase()];
+    return {
+      primarySeats: refSite?.capacity?.primarySeats || 0,
+      expectedDailyUsage: refSite?.baseline?.expectedDailyUsage || 0,
+      avgTuesThurBadge: refSite?.baseline?.avgTuesThurBadge || 0,
+    };
+  };
+  const denoms = {}; locations.forEach(loc => denoms[loc] = denomFor(loc));
+
+  const modeKey = heatmapMode || 'count';
+  const valueFor = (loc, day) => {
+    const raw = counts[loc][day]?.total || 0;
+    if (modeKey === 'count' || !REF()) return { display: raw||'', numeric: raw, units: '' };
+    const d = denoms[loc] || {};
+    let denom = 0, label = '';
+    if (modeKey === 'pct_primary_seats') { denom = d.primarySeats; label = '% seats'; }
+    else if (modeKey === 'pct_expected_usage') { denom = d.expectedDailyUsage; label = '% EDU'; }
+    else if (modeKey === 'vs_tt_baseline') { denom = d.avgTuesThurBadge; label = '% T-T'; }
+    if (!denom) return { display: raw ? `${raw}` : '', numeric: raw, units: '', missing: true };
+    const pct = (raw / denom) * 100;
+    return { display: raw ? `${pct.toFixed(pct<10?1:0)}%` : '', numeric: pct, units: label };
+  };
+
+  let maxV = 0;
+  locations.forEach(loc => days.forEach(d => { const v = valueFor(loc,d); if (v.numeric > maxV) maxV = v.numeric; }));
+  if (maxV <= 0) maxV = 1;
+  const hcls = v => !v?'heat-0':v/maxV<.25?'heat-1':v/maxV<.5?'heat-2':v/maxV<.75?'heat-3':'heat-4';
+
+  const modeLabel = { count:'total activities per day', pct_primary_seats:'% of seat capacity', pct_expected_usage:'% of expected daily traffic', vs_tt_baseline:'% vs. Tue–Thu badge baseline' }[modeKey] || 'total activities per day';
+
+  const cols=`140px repeat(${days.length},22px)`;
+  let h=`<div style="display:grid;grid-template-columns:${cols};gap:2px;margin-bottom:3px"><div></div>`;
+  days.forEach(d => { const dt=new Date(d+'T12:00:00'); h+=`<div style="font-size:9px;color:#94A3B8;text-align:center">${dt.getMonth()+1}/${dt.getDate()}</div>`; });
+  h += '</div>';
+  locations.forEach(loc => {
+    h += `<div style="display:grid;grid-template-columns:${cols};gap:2px;margin-bottom:2px;align-items:center">`;
+    h += `<div style="font-size:11px;color:#374151;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px" title="${loc}">${loc}</div>`;
+    days.forEach(d => {
+      const v = valueFor(loc, d);
+      const dc = counts[loc][d] || {};
+      const total = dc.total || 0;
+      const bparts = [];
+      if (dc.meeting)  bparts.push(`${dc.meeting} meeting${dc.meeting>1?'s':''}`);
+      if (dc.event)    bparts.push(`${dc.event} event${dc.event>1?'s':''}`);
+      if (dc.traveler) bparts.push(`${dc.traveler} traveler${dc.traveler>1?'s':''}`);
+      if (dc.space)    bparts.push(`${dc.space} reservation${dc.space>1?'s':''}`);
+      const breakdown = bparts.length ? ` — ${bparts.join(' · ')}` : '';
+      const dt = new Date(d+'T12:00:00');
+      const label = `${dt.toLocaleString('default',{weekday:'short'})} ${dt.getMonth()+1}/${dt.getDate()}`;
+      const tip = total
+        ? `${loc} · ${label}: ${total} activit${total===1?'y':'ies'}${breakdown}` + (v.units ? ` (${v.display} ${v.units})` : '') + (v.missing ? ' · no reference data' : '')
+        : `${loc} · ${label}: no activity`;
+      h += `<div class="heat-cell ${hcls(v.numeric)}" title="${tip.replace(/"/g,'&quot;')}" style="${v.missing?'opacity:.55':''}">${v.display}</div>`;
+    });
+    h += '</div>';
+  });
+  h += `<div style="display:flex;gap:12px;margin-top:14px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0">
+    <span style="font-size:11px;color:#64748B;font-weight:700">Activity level (${modeLabel}):</span>
+    ${['heat-0','heat-1','heat-2','heat-3','heat-4'].map((c,i)=>`<div style="display:flex;align-items:center;gap:4px"><div class="heat-cell ${c}" style="width:22px;height:14px;font-size:0"></div><span style="font-size:10px;color:#64748B">${['None','Light','Moderate','Busy','Peak'][i]}</span></div>`).join('')}
+    ${REF() && modeKey!=='count' ? '<span style="font-size:10px;color:#94A3B8;margin-left:8px;border-left:1px solid #E2E8F0;padding-left:8px">Shading normalized against each location\'s capacity data from the master reference</span>' : ''}
+  </div>`;
+  wrap.innerHTML = h;
+}
+
+function stsCls(s) {
+  if(!s) return 'status-other'; const sl=s.toLowerCase();
+  if(sl.includes('confirm')) return 'status-confirmed';
+  if(sl.includes('cancel')) return 'status-canceled';
+  if(sl.includes('pend')||sl.includes('approv')) return 'status-pending';
+  return 'status-other';
+}
+
+function exportCSV() {
   const recs=getFiltered();
-  const fields=['_source','_type','date','end_date','site','event_name','status','attendees','cm_captain','time','room','event_type','catering','vip','shipping','notes'];
-  const header=['source','type',...fields.slice(2),'effort_pts','capacity_pct'];
-  const rows=[header.join(','),...recs.map(r=>{
-    const eff=Math.round(effortScore(r));
-    const pct=dayCapacityPct(eff);
-    return[...fields.map(f=>`"${(r[f]||'').toString().replace(/"/g,'""')}"`),eff,pct].join(',');
-  })];
+  const fields=['_source','_type','date','end_date','site','_canonicalSite','_buildingRefId','_state','_regionalLeader','event_name','status','attendees','vip','budget','cm_captain','time','room','event_type','catering','notes','why'];
+  const fmt = (v) => Array.isArray(v) ? v.join(' / ') : (v==null?'':String(v));
+  const rows=[fields.join(','),...recs.map(r=>fields.map(f=>`"${fmt(r[f]).replace(/"/g,'""')}"`).join(','))];
   const blob=new Blob([rows.join('\n')],{type:'text/csv'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='cm-capacity-export.csv';a.click();
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='cm-forecast-export.csv'; a.click();
 }
 
-updateAB();
+updateActionBar();
+if (REF()) {
+  const tag = document.getElementById('ref-version-tag');
+  if (tag) tag.textContent = `· Reference v${REF().version} · ${REF().sites.length} sites`;
+}
 </script>
 </body>
 </html>

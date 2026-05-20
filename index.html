@@ -1859,25 +1859,29 @@ function renderWeekAheadGrid(recs, stats) {
       const cmCount = rawCMCountForSite(loc);
       const ptoOut = row.ptoOut || getPTO(loc, h.d);
       const vsTypical = row.util / MODEL.thrElevated;
-      const parts = [];
-      if (row.events)    parts.push(`${row.events} event${row.events>1?'s':''}`);
-      if (row.meetings)  parts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
-      if (row.travelers) parts.push(`${row.travelers.toFixed(row.travelers%1?1:0)} VP+ Traveler${row.travelers===1?'':'s'}`);
-      if (ptoOut)        parts.push(`${ptoOut} CM on PTO`);
-      const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% utilized · ${parts.join(' · ')} · ${vsTypical.toFixed(1)}× busier than usual`);
-      const driverParts = [];
-      if (row.events)    driverParts.push(`${row.events} event${row.events>1?'s':''}`);
-      if (row.meetings)  driverParts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
-      if (row.travelers) driverParts.push(`${row.travelers.toFixed(row.travelers%1?1:0)} VP+ Traveler${row.travelers===1?'':'s'}`);
-      if (cmCount)       driverParts.push(`${cmCount - ptoOut} of ${cmCount} CM${cmCount>1?'s':''}`);
-      const driverStr = driverParts.slice(0, 3).join(' · ');
-      const vsStr = status !== 'normal' ? `${vsTypical.toFixed(1)}× busier than usual` : null;
+      // Tooltip — full detail on hover
+      const tipParts = [];
+      if (row.meetings)  tipParts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
+      if (row.events)    tipParts.push(`${row.events} event${row.events>1?'s':''}`);
+      if (row.travelers) tipParts.push(`${row.travelers.toFixed(row.travelers%1?1:0)} VP+ Traveler${row.travelers===1?'':'s'}`);
+      if (ptoOut)        tipParts.push(`${ptoOut} CM on PTO`);
+      const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% load · ${tipParts.join(' · ')} · ${vsTypical.toFixed(1)}× vs typical`);
+      // Color-coded mini chips: M = meetings (blue), E = events (pink), T = travelers (green), R = space reservations (amber)
+      // Counts from the raw heatmap data (includes spaces, which stats doesn't track)
+      const rawDay = (function() { // pull space count from heatmap counts if available
+        try { return null; } catch(_) { return null; } // placeholder — spaces shown via reservations tab
+      })();
+      const chips = [
+        row.meetings  ? `<span style="background:#DBEAFE;color:#1D4ED8;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap">${row.meetings}M</span>` : '',
+        row.events    ? `<span style="background:#FCE7F3;color:#BE185D;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap">${row.events}E</span>` : '',
+        row.travelers ? `<span style="background:#D1FAE5;color:#065F46;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap">${row.travelers.toFixed(row.travelers%1?1:0)}T</span>` : '',
+        ptoOut        ? `<span style="background:#FEF3C7;color:#92400E;font-size:9px;font-weight:600;padding:1px 5px;border-radius:8px;white-space:nowrap">${ptoOut} PTO</span>` : '',
+      ].filter(Boolean).join('');
       html += `<td style="${tdStyle}" title="${tip}">
-        <div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;background:${c.bg};border:1px solid ${c.border};border-radius:6px;padding:6px 7px;min-width:74px">
-          <span style="font-size:14px;font-weight:700;color:${c.text};line-height:1">${utilPct}%</span>
+        <div style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;background:${c.bg};border:1px solid ${c.border};border-radius:6px;padding:7px 8px;min-width:80px">
+          <span style="font-size:13px;font-weight:700;color:${c.text};line-height:1">${utilPct}%</span>
           <span style="font-size:9px;font-weight:700;color:${c.text};opacity:.85;line-height:1;text-transform:uppercase;letter-spacing:.05em">${c.label}</span>
-          ${driverStr ? `<span style="font-size:9px;color:${c.text};opacity:.7;line-height:1;margin-top:1px;white-space:nowrap">${escapeHtml(driverStr)}</span>` : ''}
-          ${vsStr ? `<span style="font-size:9px;color:${c.text};opacity:.65;line-height:1;font-style:italic">${escapeHtml(vsStr)}</span>` : ''}
+          ${chips ? `<div style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin-top:1px">${chips}</div>` : ''}
         </div>
       </td>`;
     });
@@ -1887,10 +1891,17 @@ function renderWeekAheadGrid(recs, stats) {
   html += `</tbody></table></div>
   <div style="display:flex;gap:16px;margin-top:14px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0">
     <span style="font-size:11px;color:#64748B;font-weight:700">How to read this:</span>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Green</b> — team has capacity to spare</span></div>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Amber</b> — team is stretched, monitor closely</span></div>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Red</b> — at or over capacity, consider adding support</span></div>
-    <span style="font-size:11px;color:#94A3B8;border-left:1px solid #E2E8F0;padding-left:12px">Each cell shows: utilization % · what's driving load · how many Community Managers are on-site. Hover any cell for full details.</span>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Green</b> — capacity to spare</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Amber</b> — stretched, monitor</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Red</b> — at/over capacity</span></div>
+    <div style="display:flex;align-items:center;gap:6px;border-left:1px solid #E2E8F0;padding-left:12px">
+      <span style="font-size:11px;color:#64748B;font-weight:600">Chips:</span>
+      <span style="background:#DBEAFE;color:#1D4ED8;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">M</span><span style="font-size:10px;color:#64748B">Meetings</span>
+      <span style="background:#FCE7F3;color:#BE185D;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">E</span><span style="font-size:10px;color:#64748B">Events</span>
+      <span style="background:#D1FAE5;color:#065F46;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">T</span><span style="font-size:10px;color:#64748B">Travelers</span>
+      <span style="background:#FEF3C7;color:#92400E;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px">PTO</span><span style="font-size:10px;color:#64748B">CM out</span>
+    </div>
+    <span style="font-size:11px;color:#94A3B8">Hover any cell for full details.</span>
   </div>`;
 
   return { html, weekCounts, peakSite };

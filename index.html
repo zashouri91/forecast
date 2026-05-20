@@ -1077,6 +1077,7 @@ function renderValidationStep() {
       const curAttendees = edit.attendees !== undefined ? edit.attendees : (r.attendees || '');
       const curBudget = edit.budget !== undefined ? edit.budget : (r.budget || '');
       const curVip = edit.vip !== undefined ? edit.vip : (r.vip || '');
+      const curMult = edit._multiplier !== undefined ? edit._multiplier : (r._multiplier || 1);
 
       const statusOpts = ['Confirmed', 'Pending Approval', 'Cancelled', 'Waitlisted', 'Other']
         .map(s => `<option value="${s}"${curStatus === s ? ' selected' : ''}>${s}</option>`).join('');
@@ -1086,9 +1087,26 @@ function renderValidationStep() {
       const typeLabel = r._type || 'meeting';
       const typeBadge = `<span class="badge badge-${typeLabel}" style="font-size:9px">${typeLabel}</span>`;
 
+      // Multiplier selector — only shown for VIP-flagged meetings/events and all travelers
+      const isVipRecord = (r._type === 'meeting' || r._type === 'event') && hasVip(r);
+      const isTravelerRecord = r._type === 'traveler';
+      const showMult = isVipRecord || isTravelerRecord;
+      const multLabel = isVipRecord ? 'Meeting VIP' : 'VP+ Traveler';
+      const MULT_OPTIONS = [
+        { v: 1,   label: '1× — Standard' },
+        { v: 1.5, label: '1.5× — Director / VP' },
+        { v: 2,   label: '2× — SVP / EVP' },
+        { v: 3,   label: '3× — C-Suite / Board' },
+      ];
+      const multCell = showMult
+        ? `<select onchange="valEdit(${i},'_multiplier',+this.value)" title="Effort multiplier for ${multLabel}" style="font-size:10px;padding:2px 4px;border:1px solid ${curMult>1?'#C7D2FE':'#E2E8F0'};border-radius:4px;background:${curMult>1?'#EDE9FE':'white'};color:${curMult>1?'#4338CA':'#374151'}">
+            ${MULT_OPTIONS.map(o => `<option value="${o.v}"${curMult===o.v?' selected':''}>${o.label}</option>`).join('')}
+          </select>`
+        : `<span style="color:#CBD5E1;font-size:11px">—</span>`;
+
       return `<tr style="background:${rowBg}">
         <td style="white-space:nowrap;font-weight:600;font-size:11px">${r.date || '<span style="color:#EF4444">Missing</span>'}</td>
-        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="${escapeHtml(r.event_name || '')}">${escapeHtml(r.event_name || '—')}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="${escapeHtml(r.event_name || '')}">${escapeHtml(r.event_name || '—')}</td>
         <td>${typeBadge}</td>
         <td>
           <select onchange="valEdit(${i},'status',this.value)" style="font-size:11px;padding:2px 4px;width:150px">
@@ -1103,6 +1121,7 @@ function renderValidationStep() {
             ${yesNoOpts}
           </select>
         </td>
+        <td>${multCell}</td>
         <td style="font-size:11px;color:#64748B;white-space:nowrap">${escapeHtml(r.cm_captain || '—')}</td>
         <td style="text-align:center">${flagCell}</td>
       </tr>`;
@@ -1152,6 +1171,7 @@ function renderValidationStep() {
             <th style="text-align:right">Attendees</th>
             <th style="text-align:right">Budget</th>
             <th>VIP</th>
+            <th title="Effort multiplier — scale up impact for higher-profile VIPs or travelers">Effort ×</th>
             <th>CM Lead</th>
             <th style="text-align:center">Flag</th>
           </tr></thead>
@@ -1371,18 +1391,19 @@ function buildSiteDayStats(records) {
     if (!site) return;
     const row = add(site, d);
 
+    const mult = r._multiplier || 1; // VIP/Traveler multiplier set during validation
     if (r._type === 'meeting') {
       row.meetings += 1;
-      row.vip += hasVip(r) ? 1 : 0;
+      row.vip += hasVip(r) ? mult : 0;
       row.attendees += (r.attendees || 0);
       if (hasCatering(r)) row.catering += 1;
     } else if (r._type === 'event') {
       row.events += 1;
-      row.vip += hasVip(r) ? 1 : 0;
+      row.vip += hasVip(r) ? mult : 0;
       row.attendees += (r.attendees || 0);
       if (hasCatering(r)) row.catering += 1;
     } else if (r._type === 'traveler') {
-      row.travelers += 1;
+      row.travelers += mult;
     } else {
       // space reservations intentionally excluded from capacity load in this model
     }
@@ -1461,10 +1482,10 @@ function statusLabel(s) {
 function topDrivers(row) {
   const d = [];
   if (row.events) d.push(`${row.events} event${row.events===1?'':'s'}`);
-  if (row.vip) d.push(`${row.vip} VIP visitor${row.vip===1?'':'s'}`);
+  if (row.vip) d.push(`${row.vip.toFixed(row.vip % 1 ? 1 : 0)} Meeting VIP${row.vip===1?'':'s'}`);
   if (row.meetings) d.push(`${row.meetings} meeting${row.meetings===1?'':'s'}`);
   if (row.catering) d.push(`${row.catering} catering order${row.catering===1?'':'s'}`);
-  if (row.travelers) d.push(`${row.travelers} traveler${row.travelers===1?'':'s'}`);
+  if (row.travelers) d.push(`${row.travelers.toFixed(row.travelers % 1 ? 1 : 0)} VP+ Traveler${row.travelers===1?'':'s'}`);
   if (row.flags.backToBackEvents) d.push('back-to-back events');
   if (row.flags.highMeetings) d.push('high meeting volume');
   return d.length ? d.join(' · ') : '—';
@@ -1841,13 +1862,13 @@ function renderWeekAheadGrid(recs, stats) {
       const parts = [];
       if (row.events)    parts.push(`${row.events} event${row.events>1?'s':''}`);
       if (row.meetings)  parts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
-      if (row.travelers) parts.push(`${row.travelers} traveler${row.travelers>1?'s':''}`);
+      if (row.travelers) parts.push(`${row.travelers.toFixed(row.travelers%1?1:0)} VP+ Traveler${row.travelers===1?'':'s'}`);
       if (ptoOut)        parts.push(`${ptoOut} CM on PTO`);
       const tip = escapeHtml(`${loc} · ${h.weekday} ${h.mmdd}: ${utilPct}% utilized · ${parts.join(' · ')} · ${vsTypical.toFixed(1)}× busier than usual`);
       const driverParts = [];
       if (row.events)    driverParts.push(`${row.events} event${row.events>1?'s':''}`);
       if (row.meetings)  driverParts.push(`${row.meetings} meeting${row.meetings>1?'s':''}`);
-      if (row.travelers) driverParts.push(`${row.travelers} traveler${row.travelers>1?'s':''}`);
+      if (row.travelers) driverParts.push(`${row.travelers.toFixed(row.travelers%1?1:0)} VP+ Traveler${row.travelers===1?'':'s'}`);
       if (cmCount)       driverParts.push(`${cmCount - ptoOut} of ${cmCount} CM${cmCount>1?'s':''}`);
       const driverStr = driverParts.slice(0, 3).join(' · ');
       const vsStr = status !== 'normal' ? `${vsTypical.toFixed(1)}× busier than usual` : null;
@@ -2028,12 +2049,12 @@ function renderOverview(recs) {
                     <td style="padding:5px 8px;color:#64748B">Room support, AV, materials</td>
                   </tr>
                   <tr style="background:#FAFAFA">
-                    <td style="padding:5px 8px;font-weight:500;color:#1E293B">1 VIP visitor</td>
+                    <td style="padding:5px 8px;font-weight:500;color:#1E293B">1 Meeting VIP</td>
                     <td style="padding:4px 8px;text-align:center"><input type="number" min="0" max="20" step="0.5" value="${MODEL.wVip}" onchange="setModel('wVip',this.value)" style="width:56px;text-align:center;font-weight:700"></td>
                     <td style="padding:5px 8px;color:#64748B">White-glove service, escorting, special requests</td>
                   </tr>
                   <tr>
-                    <td style="padding:5px 8px;font-weight:500;color:#1E293B">1 Traveler</td>
+                    <td style="padding:5px 8px;font-weight:500;color:#1E293B">1 Staff VP+ Traveler</td>
                     <td style="padding:4px 8px;text-align:center"><input type="number" min="0" max="20" step="0.5" value="${MODEL.wTraveler}" onchange="setModel('wTraveler',this.value)" style="width:56px;text-align:center;font-weight:700"></td>
                     <td style="padding:5px 8px;color:#64748B">Workspace, badge access, orientation</td>
                   </tr>

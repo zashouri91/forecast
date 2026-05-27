@@ -2219,143 +2219,158 @@ function exportWeekAheadPDF() {
     </div>`;
   }
 
-  // ── PAGE 2: Travelers, Events & VIP Meetings — flat Excel-style table ──
-  // Columns: Location | Day | Name | Type | VIP | Attendees | Catering | Notes
-  const vipTravelerPageHtml = (() => {
-    // Include: travelers, events, and meetings that have a VIP
-    const eligible = allRecs.filter(r =>
-      daysSet.has(r.date) && r._type !== 'space' &&
-      (r._type === 'traveler' || r._type === 'event' || (r._type === 'meeting' && hasVip(r)))
-    );
+  // Shared: build grouped (Day → Site → rows) table body
+  // recFilter: fn(r) => bool — which records to include
+  // rowRenderer: fn(r) => string — HTML for a <tr> of data columns
+  // colHeaders: HTML string of <th> cells (after Location col)
+  function buildGroupedTable(recFilter, rowRenderer, colHeaders, title, subtitle) {
+    const eligible = allRecs.filter(r => daysSet.has(r.date) && recFilter(r));
     if (!eligible.length) return '';
 
-    // Sort: by date, then location, then type order (traveler → event → meeting)
+    // Group: day → site → records[]
+    const byDaySite = {};
     const typeOrder = { traveler: 0, event: 1, meeting: 2 };
-    eligible.sort((a, b) => {
-      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-      const la = (a._canonicalSite || a.site || '').toLowerCase();
-      const lb = (b._canonicalSite || b.site || '').toLowerCase();
-      if (la !== lb) return la < lb ? -1 : 1;
-      return (typeOrder[a._type] ?? 9) - (typeOrder[b._type] ?? 9);
+    eligible.forEach(r => {
+      const loc = r._canonicalSite || r.site || '—';
+      if (!byDaySite[r.date]) byDaySite[r.date] = {};
+      if (!byDaySite[r.date][loc]) byDaySite[r.date][loc] = [];
+      byDaySite[r.date][loc].push(r);
     });
+    // Sort records within each site/day by type then name
+    Object.values(byDaySite).forEach(sitemap =>
+      Object.values(sitemap).forEach(recs =>
+        recs.sort((a, b) => (typeOrder[a._type] ?? 9) - (typeOrder[b._type] ?? 9))
+      )
+    );
 
-    const typePill = t => {
-      const cfg = { traveler: ['#D1FAE5','#065F46','Traveler'], event: ['#FCE7F3','#9D174D','Event'], meeting: ['#EEF2FF','#3730A3','VIP Mtg'] };
-      const [bg, fg, label] = cfg[t] || ['#F1F5F9','#475569', t];
-      return `<span style="background:${bg};color:${fg};font-size:7px;font-weight:700;padding:1px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">${label}</span>`;
-    };
+    const sortedDays = days.filter(d => byDaySite[d]);
+    let tbody = '';
 
-    let tbodyRows = '';
-    let lastDate = null;
-    eligible.forEach((r, i) => {
-      const loc  = r._canonicalSite || r.site || '—';
-      const dt   = new Date(r.date + 'T12:00:00');
-      const dayLabel = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      const name = escapeHtml(r.event_name || r.vip || '—');
-      const vip  = hasVip(r) ? escapeHtml(String(r.vip)) : '';
-      const att  = r.attendees > 0 ? r.attendees : '';
-      const cat  = r.catering ? escapeHtml(String(r.catering).slice(0, 60)) : '';
-      const rowBg = i % 2 === 0 ? '#fff' : '#f8fafc';
+    sortedDays.forEach(d => {
+      const dt = new Date(d + 'T12:00:00');
+      const dayLabel = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      const isToday = d === todayStr();
 
-      // Day separator row
-      if (r.date !== lastDate) {
-        lastDate = r.date;
-        tbodyRows += `<tr><td colspan="7" style="padding:6px 10px;background:#EEF2FF;font-size:9px;font-weight:700;color:#4338CA;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #C7D2FE">${dayLabel}</td></tr>`;
-      }
-
-      tbodyRows += `<tr style="background:${rowBg}">
-        <td style="padding:5px 10px;font-size:9px;color:#1e293b;font-weight:600;border-bottom:1px solid #f1f5f9;white-space:nowrap">${escapeHtml(loc)}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #f1f5f9">${typePill(r._type)}</td>
-        <td style="padding:5px 10px;font-size:9px;color:#1e293b;border-bottom:1px solid #f1f5f9">${name}</td>
-        <td style="padding:5px 10px;font-size:9px;color:#7C3AED;font-weight:600;border-bottom:1px solid #f1f5f9">${vip ? '★ ' + vip : ''}</td>
-        <td style="padding:5px 10px;font-size:9px;color:#374151;text-align:center;border-bottom:1px solid #f1f5f9">${att}</td>
-        <td style="padding:5px 10px;font-size:8.5px;color:#64748b;border-bottom:1px solid #f1f5f9">${cat}</td>
-        <td style="padding:5px 10px;font-size:8px;color:#94a3b8;border-bottom:1px solid #f1f5f9">${r.notes ? escapeHtml(String(r.notes).slice(0,80)) : ''}</td>
+      // Day header row
+      tbody += `<tr>
+        <td colspan="99" style="padding:8px 14px;background:${isToday ? '#4338CA' : '#1e293b'};color:#fff;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;border-top:3px solid ${isToday ? '#6366F1' : '#334155'}">
+          ${isToday ? '▶ TODAY — ' : ''}${escapeHtml(dayLabel)}
+        </td>
       </tr>`;
+
+      const sitesOnDay = Object.keys(byDaySite[d]).sort();
+      sitesOnDay.forEach((loc, si) => {
+        const recs = byDaySite[d][loc];
+        const cms  = getCMsForSite(loc);
+        const cmStr = cms.length ? cms.join(', ') : '';
+
+        // Site sub-header
+        tbody += `<tr>
+          <td colspan="99" style="padding:5px 14px 5px 20px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;border-top:1px solid #e2e8f0">
+            <span style="font-size:10px;font-weight:800;color:#1e293b;letter-spacing:-.01em">${escapeHtml(loc)}</span>
+            ${cmStr ? `<span style="font-size:8px;color:#94a3b8;margin-left:10px">CMs: ${escapeHtml(cmStr)}</span>` : ''}
+          </td>
+        </tr>`;
+
+        // Record rows
+        recs.forEach((r, ri) => {
+          const rowBg = ri % 2 === 0 ? '#fff' : '#fafafa';
+          tbody += rowRenderer(r, rowBg);
+        });
+
+        // Spacer between sites (not after last)
+        if (si < sitesOnDay.length - 1) {
+          tbody += `<tr><td colspan="99" style="height:2px;background:#e2e8f0"></td></tr>`;
+        }
+      });
+
+      // Spacer between days
+      tbody += `<tr><td colspan="99" style="height:6px"></td></tr>`;
     });
 
-    const th = txt => `<th style="text-align:left;padding:7px 10px;font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #e2e8f0;background:#f8fafc;white-space:nowrap">${txt}</th>`;
+    const th = txt => `<th style="text-align:left;padding:7px 10px;font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #334155;background:#1e293b;color:#94a3b8;white-space:nowrap">${txt}</th>`;
 
     return `<div style="page-break-before:always;padding-top:16px">
-      ${pdfPageHeader('Travelers, Events & VIP Meetings — Detail')}
-      <p style="font-size:8.5px;color:#64748b;margin:8px 0 10px">All travelers, events, and meetings with VIP attendees for the week. Sorted by day then location.</p>
-      <table style="border-collapse:collapse;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif">
-        <thead><tr>
-          ${th('Location')}${th('Type')}${th('Name / Traveler')}${th('VIP')}${th('Attendees')}${th('Catering')}${th('Notes')}
-        </tr></thead>
-        <tbody>${tbodyRows}</tbody>
+      ${pdfPageHeader(title)}
+      <p style="font-size:8.5px;color:#64748b;margin:8px 0 10px">${escapeHtml(subtitle)}</p>
+      <table style="border-collapse:collapse;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;table-layout:auto">
+        <thead><tr>${colHeaders(th)}</tr></thead>
+        <tbody>${tbody}</tbody>
       </table>
     </div>`;
+  }
+
+  // ── PAGE 2: Travelers, Events & VIP Meetings ──
+  const vipTravelerPageHtml = (() => {
+    const typePill = t => {
+      const cfg = { traveler:['#D1FAE5','#065F46','Traveler'], event:['#FCE7F3','#9D174D','Event'], meeting:['#EEF2FF','#3730A3','VIP Mtg'] };
+      const [bg, fg, label] = cfg[t] || ['#F1F5F9','#475569', t];
+      return `<span style="background:${bg};color:${fg};font-size:7px;font-weight:700;padding:1px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">${label}</span>`;
+    };
+
+    const rowRenderer = (r, bg) => {
+      const name  = escapeHtml(r.event_name || r.vip || '—');
+      const vip   = hasVip(r) ? `<span style="color:#7C3AED;font-weight:700">★ ${escapeHtml(String(r.vip))}</span>` : '';
+      const att   = r.attendees > 0 ? r.attendees : '—';
+      const cat   = r.catering ? escapeHtml(String(r.catering).slice(0, 70)) : '—';
+      const notes = r.notes ? escapeHtml(String(r.notes).slice(0, 80)) : '';
+      return `<tr style="background:${bg}">
+        <td style="padding:5px 10px 5px 24px;border-bottom:1px solid #f1f5f9">${typePill(r._type)}</td>
+        <td style="padding:5px 14px;font-size:9px;font-weight:600;color:#1e293b;border-bottom:1px solid #f1f5f9">${name}</td>
+        <td style="padding:5px 14px;font-size:9px;border-bottom:1px solid #f1f5f9">${vip}</td>
+        <td style="padding:5px 14px;font-size:9px;color:#374151;text-align:center;border-bottom:1px solid #f1f5f9">${att}</td>
+        <td style="padding:5px 14px;font-size:8.5px;color:#64748b;border-bottom:1px solid #f1f5f9">${cat}</td>
+        <td style="padding:5px 14px;font-size:8px;color:#94a3b8;border-bottom:1px solid #f1f5f9">${notes}</td>
+      </tr>`;
+    };
+
+    const colHeaders = th => [th('Type'), th('Name / Traveler'), th('VIP Attendee'), th('# Ppl'), th('Catering'), th('Notes')].join('');
+
+    return buildGroupedTable(
+      r => r._type !== 'space' && (r._type === 'traveler' || r._type === 'event' || (r._type === 'meeting' && hasVip(r))),
+      rowRenderer, colHeaders,
+      'Travelers, Events & VIP Meetings',
+      'Grouped by day then location. Includes all travelers, all events, and meetings with VIP attendees.'
+    );
   })();
 
-  // ── PAGE 3: All Meetings & Events — flat table ──
+  // ── PAGE 3: All Meetings & Events ──
   const meetingsEventsPageHtml = (() => {
-    const eligible = allRecs.filter(r =>
-      daysSet.has(r.date) && (r._type === 'meeting' || r._type === 'event')
-    );
-    if (!eligible.length) return '';
-
-    eligible.sort((a, b) => {
-      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-      const la = (a._canonicalSite || a.site || '').toLowerCase();
-      const lb = (b._canonicalSite || b.site || '').toLowerCase();
-      if (la !== lb) return la < lb ? -1 : 1;
-      return a._type === 'meeting' ? -1 : 1;
-    });
-
     const typePill2 = t => {
-      const cfg = { event: ['#FCE7F3','#9D174D','Event'], meeting: ['#EEF2FF','#3730A3','Meeting'] };
+      const cfg = { event:['#FCE7F3','#9D174D','Event'], meeting:['#EEF2FF','#3730A3','Meeting'] };
       const [bg, fg, label] = cfg[t] || ['#F1F5F9','#475569', t];
-      return `<span style="background:${bg};color:${fg};font-size:7px;font-weight:700;padding:1px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">${label}</span>`;
+      return `<span style="background:${bg};color:${fg};font-size:7px;font-weight:700;padding:1px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">${label}</span>`;
     };
 
-    let tbodyRows = '';
-    let lastDate2 = null;
-    eligible.forEach((r, i) => {
-      const loc  = r._canonicalSite || r.site || '—';
-      const dt   = new Date(r.date + 'T12:00:00');
-      const dayLabel = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      const name = escapeHtml(r.event_name || '—');
-      const vip  = hasVip(r) ? escapeHtml(String(r.vip)) : '';
-      const att  = r.attendees > 0 ? r.attendees : '';
-      const room = r.room ? escapeHtml(String(r.room).slice(0, 40)) : '';
-      const cat  = r.catering ? escapeHtml(String(r.catering).slice(0, 60)) : '';
-      let budget = '';
-      if (r.budget) {
-        const num = Number(String(r.budget).replace(/[^0-9.]/g, ''));
-        if (!isNaN(num) && num > 0) budget = '$' + num.toLocaleString();
-      }
-      const rowBg = i % 2 === 0 ? '#fff' : '#f8fafc';
-
-      if (r.date !== lastDate2) {
-        lastDate2 = r.date;
-        tbodyRows += `<tr><td colspan="8" style="padding:6px 10px;background:#EEF2FF;font-size:9px;font-weight:700;color:#4338CA;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #C7D2FE">${dayLabel}</td></tr>`;
-      }
-
-      tbodyRows += `<tr style="background:${rowBg}">
-        <td style="padding:5px 10px;font-size:9px;color:#1e293b;font-weight:600;border-bottom:1px solid #f1f5f9;white-space:nowrap">${escapeHtml(loc)}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #f1f5f9">${typePill2(r._type)}</td>
-        <td style="padding:5px 10px;font-size:9px;color:#1e293b;border-bottom:1px solid #f1f5f9">${name}</td>
-        <td style="padding:5px 10px;font-size:9px;color:#7C3AED;font-weight:600;border-bottom:1px solid #f1f5f9">${vip ? '★ ' + vip : ''}</td>
-        <td style="padding:5px 10px;font-size:9px;color:#374151;text-align:center;border-bottom:1px solid #f1f5f9">${att}</td>
-        <td style="padding:5px 10px;font-size:8.5px;color:#64748b;border-bottom:1px solid #f1f5f9;white-space:nowrap">${room}</td>
-        <td style="padding:5px 10px;font-size:8.5px;color:#64748b;border-bottom:1px solid #f1f5f9">${cat}</td>
-        <td style="padding:5px 10px;font-size:8.5px;color:#059669;font-weight:600;border-bottom:1px solid #f1f5f9;white-space:nowrap">${budget}</td>
+    const rowRenderer2 = (r, bg) => {
+      const name  = escapeHtml(r.event_name || '—');
+      const vip   = hasVip(r) ? `<span style="color:#7C3AED;font-weight:700">★ ${escapeHtml(String(r.vip))}</span>` : '';
+      const att   = r.attendees > 0 ? r.attendees : '—';
+      const room  = r.room ? escapeHtml(String(r.room).slice(0, 35)) : '—';
+      const cat   = r.catering ? escapeHtml(String(r.catering).slice(0, 60)) : '—';
+      let budget  = '—';
+      if (r.budget) { const n = Number(String(r.budget).replace(/[^0-9.]/g,'')); if (!isNaN(n)&&n>0) budget=`$${n.toLocaleString()}`; }
+      const status = r.status ? escapeHtml(r.status) : '';
+      return `<tr style="background:${bg}">
+        <td style="padding:5px 10px 5px 24px;border-bottom:1px solid #f1f5f9">${typePill2(r._type)}</td>
+        <td style="padding:5px 14px;font-size:9px;font-weight:600;color:#1e293b;border-bottom:1px solid #f1f5f9">${name}</td>
+        <td style="padding:5px 14px;font-size:9px;border-bottom:1px solid #f1f5f9">${vip}</td>
+        <td style="padding:5px 14px;font-size:9px;color:#374151;text-align:center;border-bottom:1px solid #f1f5f9">${att}</td>
+        <td style="padding:5px 14px;font-size:8.5px;color:#64748b;border-bottom:1px solid #f1f5f9;white-space:nowrap">${room}</td>
+        <td style="padding:5px 14px;font-size:8.5px;color:#64748b;border-bottom:1px solid #f1f5f9">${cat}</td>
+        <td style="padding:5px 14px;font-size:8.5px;color:#059669;font-weight:600;border-bottom:1px solid #f1f5f9;white-space:nowrap">${budget}</td>
+        <td style="padding:5px 14px;font-size:8px;color:#94a3b8;border-bottom:1px solid #f1f5f9">${status}</td>
       </tr>`;
-    });
+    };
 
-    const th2 = txt => `<th style="text-align:left;padding:7px 10px;font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #e2e8f0;background:#f8fafc;white-space:nowrap">${txt}</th>`;
+    const colHeaders2 = th => [th('Type'), th('Meeting / Event Name'), th('VIP Attendee'), th('# Ppl'), th('Room'), th('Catering'), th('Budget'), th('Status')].join('');
 
-    return `<div style="page-break-before:always;padding-top:16px">
-      ${pdfPageHeader('Meetings & Events — Detail')}
-      <p style="font-size:8.5px;color:#64748b;margin:8px 0 10px">All meetings and events for the week. Sorted by day then location.</p>
-      <table style="border-collapse:collapse;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif">
-        <thead><tr>
-          ${th2('Location')}${th2('Type')}${th2('Name / Event')}${th2('VIP')}${th2('Attendees')}${th2('Room')}${th2('Catering')}${th2('Budget')}
-        </tr></thead>
-        <tbody>${tbodyRows}</tbody>
-      </table>
-    </div>`;
+    return buildGroupedTable(
+      r => r._type === 'meeting' || r._type === 'event',
+      rowRenderer2, colHeaders2,
+      'Meetings & Events — Full Detail',
+      'All meetings and events for the week, grouped by day then location.'
+    );
   })();
 
   const pdfHtml = `<!DOCTYPE html>

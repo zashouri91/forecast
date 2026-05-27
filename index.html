@@ -524,10 +524,10 @@ const FIELD_ALIASES = {
   // 'valid' removed — it stole priority from the actual 'Status' column in meeting reports (Valid is a boolean flag, not a status)
   status:['status','mng approval status'],
   // 'reservation_duration' removed — it is a time duration, not a headcount; caused false positives in Space Report and Planning Grid
-  attendees:['# guest','number of attendees','# attendees','num attendees','number of guests','headcount','expected attendees','attendees'],
+  attendees:['# guest','number of attendees','# attendees','num attendees','number of guests','headcount','expected attendees','attendees','event attendance total','event attendance','attendance total','total attendance','rsvps'],
   // added 'vip/meeting host' and 'vp/meeting host' for Mason and similar files
-  vip:['vip','vips','vip attendee','vip attendees','vip name','vip names','executive','exec attendee','exec attending','principal','principals','vip/meeting host','vp/meeting host'],
-  budget:['budget','event budget','event spend','total spend','estimated spend','estimated cost','total cost','event cost','planned spend','approved budget'],
+  vip:['vip','vips','vip attendee','vip attendees','vip name','vip names','executive','exec attendee','exec attending','principal','principals','vip/meeting host','vp/meeting host','slt/executives in attendance','slt in attendance','executives in attendance','slt attendees'],
+  budget:['budget','event budget','event spend','total spend','estimated spend','estimated cost','total cost','event cost','planned spend','approved budget','total est event budget','total estimated event budget','total estimated budget','est event budget'],
   cm_captain:['cm captain','cm event lead','event team member','event lead','cm lead','cm owner'],
   time:['time','event time','meeting time','start time'],
   room:['room','requested meeting room','event location','amenity_name','amenity name','workspace','desk','seat'],

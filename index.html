@@ -1814,12 +1814,17 @@ function renderWeekAheadGrid(recs, stats) {
 
   // Build per-site-per-day record lookup for detail list
   const byLocDay = {};
+  const spaceByLocDay = {}; // aggregate desk/workspace reservation counts
   recs.forEach(r => {
     const loc = r._canonicalSite || r.site;
     if (!loc || !r.date) return;
     if (!byLocDay[loc]) byLocDay[loc] = {};
     if (!byLocDay[loc][r.date]) byLocDay[loc][r.date] = [];
     byLocDay[loc][r.date].push(r);
+    if (r._type === 'space') {
+      if (!spaceByLocDay[loc]) spaceByLocDay[loc] = {};
+      spaceByLocDay[loc][r.date] = (spaceByLocDay[loc][r.date] || 0) + 1;
+    }
   });
 
   const C = {
@@ -1879,10 +1884,23 @@ function renderWeekAheadGrid(recs, stats) {
       const row = stats[loc]?.[h.d];
       const dayRecs = (byLocDay[loc]?.[h.d] || []).filter(r => r._type !== 'space');
       const ptoOut = (row?.ptoOut) || getPTO(loc, h.d);
+      const spaceCount = spaceByLocDay[loc]?.[h.d] || 0;
       const tdBase = `padding:0;border-bottom:1px solid #F1F5F9;border-right:1px solid #F1F5F9;${h.isToday ? 'background:#F9F8FF;' : ''}`;
 
-      if (!dayRecs.length && !ptoOut) {
+      // Fully empty — no meetings/events/travelers, no PTO, no desk reservations
+      if (!dayRecs.length && !ptoOut && !spaceCount) {
         html += `<td style="${tdBase}"><div style="padding:10px;font-size:11px;color:#CBD5E1;text-align:center">—</div></td>`;
+        return;
+      }
+
+      // Space-reservations-only day (no M/E/T activity, no PTO)
+      if (!dayRecs.length && !ptoOut && spaceCount) {
+        html += `<td style="${tdBase}">
+          <div style="padding:8px 10px;display:flex;align-items:center;gap:5px">
+            <span style="width:7px;height:7px;border-radius:2px;background:#94A3B8;flex-shrink:0"></span>
+            <span style="font-size:10px;color:#94A3B8;font-weight:500">${spaceCount} desk res.</span>
+          </div>
+        </td>`;
         return;
       }
 
@@ -1896,6 +1914,11 @@ function renderWeekAheadGrid(recs, stats) {
             <span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;flex-shrink:0;margin-top:1px"></span>
             <div style="font-size:10px;font-weight:600;color:#92400E">${ptoOut} CM on PTO</div>
           </div>` : '';
+      const spaceItem = spaceCount
+        ? `<div style="display:flex;align-items:center;gap:5px;padding-top:4px;margin-top:3px;border-top:1px solid rgba(0,0,0,.08)">
+            <span style="width:7px;height:7px;border-radius:2px;background:#94A3B8;flex-shrink:0"></span>
+            <span style="font-size:9px;color:#94A3B8;font-weight:500">${spaceCount} desk res.</span>
+          </div>` : '';
 
       html += `<td style="${tdBase}">
         <div style="border-left:3px solid ${c.border}">
@@ -1903,7 +1926,7 @@ function renderWeekAheadGrid(recs, stats) {
             <span style="font-size:11px;font-weight:700;color:${c.text}">${utilPct}%</span>
             <span style="font-size:9px;font-weight:700;color:${c.text};text-transform:uppercase;letter-spacing:.05em;opacity:.8">${c.label}</span>
           </div>
-          <div style="padding:4px 8px 6px">${recItems}${ptoItem}</div>
+          <div style="padding:4px 8px 6px">${recItems}${ptoItem}${spaceItem}</div>
         </div>
       </td>`;
     });
@@ -1921,10 +1944,252 @@ function renderWeekAheadGrid(recs, stats) {
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#EC4899;display:inline-block"></span><span style="font-size:10px;color:#64748B">Event</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block"></span><span style="font-size:10px;color:#64748B">Traveler</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block"></span><span style="font-size:10px;color:#64748B">CM on PTO</span></div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#94A3B8;display:inline-block"></span><span style="font-size:10px;color:#64748B">Desk Reservations</span></div>
     </div>
   </div>`;
 
   return { html, weekCounts, peakSite };
+}
+
+// ── PDF EXPORT ──────────────────────────────────────────────────────────────
+function exportWeekAheadPDF() {
+  const today = todayStr();
+  const days = Array.from({length: 14}, (_, i) => addDays(today, i))
+    .filter(d => { const dow = new Date(d + 'T12:00:00').getDay(); return dow !== 0 && dow !== 6; })
+    .slice(0, 5);
+
+  const allRecs = getFiltered();
+  const stats = buildSiteDayStats(allRecs);
+  const locations = [...new Set(allRecs.filter(r => r._canonicalSite).map(r => r._canonicalSite))].sort();
+
+  const dayMeta = days.map(d => {
+    const dt = new Date(d + 'T12:00:00');
+    return {
+      d,
+      isToday: d === today,
+      weekday: dt.toLocaleDateString('en-US', {weekday:'short'}),
+      fullDate: dt.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'}),
+      mmdd: `${dt.getMonth()+1}/${dt.getDate()}`,
+    };
+  });
+
+  const byLocDay = {}, spaceByLocDay = {};
+  allRecs.forEach(r => {
+    const loc = r._canonicalSite || r.site;
+    if (!loc || !r.date) return;
+    if (!byLocDay[loc]) byLocDay[loc] = {};
+    if (!byLocDay[loc][r.date]) byLocDay[loc][r.date] = [];
+    byLocDay[loc][r.date].push(r);
+    if (r._type === 'space') {
+      if (!spaceByLocDay[loc]) spaceByLocDay[loc] = {};
+      spaceByLocDay[loc][r.date] = (spaceByLocDay[loc][r.date] || 0) + 1;
+    }
+  });
+
+  // KPI tallies (per site-day this week)
+  let kpiHigh = 0, kpiElevated = 0, kpiOk = 0;
+  locations.forEach(loc => {
+    days.forEach(d => {
+      const row = stats[loc]?.[d];
+      const s = row ? (row.flags?.status || riskStatus(row.util, false)) : 'normal';
+      if (s === 'high') kpiHigh++;
+      else if (s === 'elevated') kpiElevated++;
+      else kpiOk++;
+    });
+  });
+
+  const C = {
+    high:     { bg: '#FEE2E2', border: '#FCA5A5', text: '#991B1B', label: 'High' },
+    elevated: { bg: '#FEF3C7', border: '#FCD34D', text: '#92400E', label: 'Busy' },
+    normal:   { bg: '#DCFCE7', border: '#86EFAC', text: '#065F46', label: 'OK' },
+  };
+
+  const headerCells = dayMeta.map(h =>
+    `<th style="text-align:left;padding:7px 8px 9px;border-bottom:2px solid ${h.isToday ? '#4338CA' : '#e2e8f0'};background:${h.isToday ? '#F5F3FF' : 'transparent'}">
+      <div style="font-size:11px;font-weight:700;color:${h.isToday ? '#4338CA' : '#374151'}">${h.weekday}</div>
+      <div style="font-size:10px;color:${h.isToday ? '#6366F1' : '#94A3B8'}">${h.mmdd}</div>
+    </th>`
+  ).join('');
+
+  let tableRows = '';
+  locations.forEach((loc, idx) => {
+    const rowBg = idx % 2 === 0 ? '#fafafa' : '#ffffff';
+    let cells = `<td style="padding:8px 10px;border-right:1px solid #e2e8f0;background:${rowBg};font-weight:700;font-size:11px;white-space:nowrap;vertical-align:top;color:#1e293b">${escapeHtml(loc)}</td>`;
+
+    dayMeta.forEach(h => {
+      const row = stats[loc]?.[h.d];
+      const dayRecs = (byLocDay[loc]?.[h.d] || []).filter(r => r._type !== 'space');
+      const ptoOut = row?.ptoOut || getPTO(loc, h.d);
+      const spaceCount = spaceByLocDay[loc]?.[h.d] || 0;
+
+      if (!dayRecs.length && !ptoOut && !spaceCount) {
+        cells += `<td style="padding:8px;border-right:1px solid #e2e8f0;color:#cbd5e1;text-align:center;font-size:11px;vertical-align:top;background:${rowBg}">—</td>`;
+        return;
+      }
+
+      if (!dayRecs.length && !ptoOut && spaceCount) {
+        cells += `<td style="padding:8px 10px;border-right:1px solid #e2e8f0;vertical-align:top;background:${rowBg}">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="width:6px;height:6px;border-radius:2px;background:#94A3B8;flex-shrink:0"></span>
+            <span style="font-size:9px;color:#94a3b8;font-weight:500">${spaceCount} desk res.</span>
+          </div>
+        </td>`;
+        return;
+      }
+
+      const status = row ? (row.flags?.status || riskStatus(row.util, false)) : 'normal';
+      const c = C[status] || C.normal;
+      const utilPct = row ? Math.round(row.util * 100) : (MODEL.baselineLoad || 25);
+
+      let items = '';
+      dayRecs.forEach(r => {
+        const name = r.event_name || r.vip || '—';
+        const trunc = name.length > 34 ? name.slice(0, 32) + '…' : name;
+        const dot = r._type === 'event' ? '#EC4899' : r._type === 'traveler' ? '#10B981' : '#3B82F6';
+        const meta = [];
+        if (r.attendees > 0) meta.push(`${r.attendees} ppl`);
+        if (hasVip(r) && r._type !== 'traveler') {
+          const vn = String(r.vip); meta.push(`★ ${vn.length > 22 ? vn.slice(0,20)+'…' : vn}`);
+        }
+        items += `<div style="display:flex;gap:4px;align-items:flex-start;padding:2px 0;border-bottom:1px solid rgba(0,0,0,.05)">
+          <span style="width:6px;height:6px;border-radius:50%;background:${dot};flex-shrink:0;margin-top:2px"></span>
+          <div>
+            <div style="font-size:9px;font-weight:600;color:#1e293b;line-height:1.3">${escapeHtml(trunc)}</div>
+            ${meta.length ? `<div style="font-size:8px;color:#64748b">${escapeHtml(meta.join(' · '))}</div>` : ''}
+          </div>
+        </div>`;
+      });
+
+      if (ptoOut) items += `<div style="display:flex;gap:4px;align-items:center;padding:2px 0;border-bottom:1px solid rgba(0,0,0,.05)">
+        <span style="width:6px;height:6px;border-radius:50%;background:#F59E0B;flex-shrink:0"></span>
+        <div style="font-size:9px;font-weight:600;color:#92400E">${ptoOut} CM on PTO</div>
+      </div>`;
+
+      if (spaceCount) items += `<div style="display:flex;gap:4px;align-items:center;padding-top:3px;margin-top:2px;border-top:1px solid rgba(0,0,0,.08)">
+        <span style="width:6px;height:6px;border-radius:2px;background:#94A3B8;flex-shrink:0"></span>
+        <div style="font-size:8px;color:#94a3b8;font-weight:500">${spaceCount} desk res.</div>
+      </div>`;
+
+      cells += `<td style="padding:0;border-right:1px solid #e2e8f0;vertical-align:top;background:${rowBg}">
+        <div style="border-left:3px solid ${c.border}">
+          <div style="background:${c.bg};padding:4px 7px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:10px;font-weight:700;color:${c.text}">${utilPct}%</span>
+            <span style="font-size:8px;font-weight:700;color:${c.text};text-transform:uppercase;letter-spacing:.04em">${c.label}</span>
+          </div>
+          <div style="padding:3px 7px 5px">${items}</div>
+        </div>
+      </td>`;
+    });
+
+    tableRows += `<tr>${cells}</tr>`;
+  });
+
+  const generatedAt = new Date().toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
+  const weekRange = dayMeta.length ? `${dayMeta[0].fullDate} – ${dayMeta[dayMeta.length-1].fullDate}` : '';
+
+  const pdfHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PulsePoint CM Forecast — Week Ahead</title>
+<style>
+  @page { size: landscape; margin: 12mm 12mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; background: #fff; color: #1e293b; font-size: 12px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 12px; border-bottom: 2px solid #4338CA; margin-bottom: 12px; }
+  .logo { font-size: 20px; font-weight: 800; color: #4338CA; letter-spacing: -.03em; line-height: 1; }
+  .logo em { color: #10B981; font-style: normal; }
+  .header-right { text-align: right; }
+  .header-right h1 { font-size: 13px; font-weight: 700; color: #1e293b; }
+  .header-right p { font-size: 10px; color: #64748b; margin-top: 3px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .kpi { border-radius: 8px; padding: 9px 12px; border: 1px solid; }
+  .kpi-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+  .kpi-value { font-size: 24px; font-weight: 800; line-height: 1; }
+  .kpi-sub { font-size: 8px; color: #64748b; margin-top: 3px; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  th, td { border-bottom: 1px solid #f1f5f9; }
+  .legend { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 7px 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; margin-top: 10px; }
+  .li { display: flex; align-items: center; gap: 4px; font-size: 8.5px; color: #64748b; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .sq { width: 8px; height: 8px; border-radius: 2px; display: inline-block; flex-shrink: 0; border: 1px solid; }
+  .footer { margin-top: 10px; font-size: 7.5px; color: #94a3b8; display: flex; justify-content: space-between; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="logo">Pulse<em>Point</em></div>
+      <div style="font-size:10px;color:#64748b;margin-top:4px">Community Manager Operations</div>
+    </div>
+    <div class="header-right">
+      <h1>Week Ahead — Team Capacity by Location</h1>
+      <p>${escapeHtml(weekRange)}</p>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi" style="border-color:#FECACA;background:#FEF2F2">
+      <div class="kpi-label" style="color:#991B1B">Needs Support</div>
+      <div class="kpi-value" style="color:#991B1B">${kpiHigh}</div>
+      <div class="kpi-sub">site-day${kpiHigh !== 1 ? 's' : ''} at max capacity</div>
+    </div>
+    <div class="kpi" style="border-color:#FCD34D;background:#FFFBEB">
+      <div class="kpi-label" style="color:#92400E">Monitor</div>
+      <div class="kpi-value" style="color:#92400E">${kpiElevated}</div>
+      <div class="kpi-sub">site-day${kpiElevated !== 1 ? 's' : ''} running stretched</div>
+    </div>
+    <div class="kpi" style="border-color:#BBF7D0;background:#F0FDF4">
+      <div class="kpi-label" style="color:#065F46">In the Clear</div>
+      <div class="kpi-value" style="color:#065F46">${kpiOk}</div>
+      <div class="kpi-sub">site-day${kpiOk !== 1 ? 's' : ''} with room to spare</div>
+    </div>
+    <div class="kpi" style="border-color:#C7D2FE;background:#EEF2FF">
+      <div class="kpi-label" style="color:#3730A3">Locations Tracked</div>
+      <div class="kpi-value" style="color:#3730A3">${locations.length}</div>
+      <div class="kpi-sub">active PulsePoint sites</div>
+    </div>
+  </div>
+
+  <table>
+    <colgroup>
+      <col style="width:110px">
+      ${days.map(() => '<col>').join('')}
+    </colgroup>
+    <thead>
+      <tr>
+        <th style="padding:7px 10px 9px;font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #e2e8f0">Location</th>
+        ${headerCells}
+      </tr>
+    </thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+
+  <div class="legend">
+    <span style="font-size:8.5px;font-weight:700;color:#64748b">Legend:</span>
+    <div class="li"><span class="sq" style="background:#FEE2E2;border-color:#FCA5A5"></span><b>Red</b> — at/over capacity</div>
+    <div class="li"><span class="sq" style="background:#FEF3C7;border-color:#FCD34D"></span><b>Amber</b> — stretched</div>
+    <div class="li"><span class="sq" style="background:#DCFCE7;border-color:#86EFAC"></span><b>Green</b> — capacity to spare</div>
+    <div class="li"><span class="dot" style="background:#3B82F6"></span>Meeting</div>
+    <div class="li"><span class="dot" style="background:#EC4899"></span>Event</div>
+    <div class="li"><span class="dot" style="background:#10B981"></span>Traveler</div>
+    <div class="li"><span class="dot" style="background:#F59E0B"></span>CM on PTO</div>
+    <div class="li"><span class="sq" style="background:#94A3B8;border-color:#94A3B8"></span>Desk reservations</div>
+  </div>
+
+  <div class="footer">
+    <span>Generated ${escapeHtml(generatedAt)} &nbsp;·&nbsp; PulsePoint Community Manager Operations &nbsp;·&nbsp; Confidential</span>
+    <span>Capacity model: ${MODEL.meetingEqPerDay} meeting-equivalents / CM / day &nbsp;·&nbsp; Baseline floor: ${MODEL.baselineLoad}%</span>
+  </div>
+
+  <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); };<\/script>
+</body>
+</html>`;
+
+  const blob = new Blob([pdfHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
 }
 
 function renderOverview(recs) {
@@ -1965,6 +2230,10 @@ function renderOverview(recs) {
           <div class="card-title">Week Ahead — Team Capacity by Location</div>
           <div class="text-muted" style="margin-top:2px">How loaded is each Community Manager team today through the next 7 days? Hover any cell for a full activity breakdown.</div>
         </div>
+        <button class="btn btn-sm btn-secondary" onclick="exportWeekAheadPDF()" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16v1a1 1 0 001 1h10a1 1 0 001-1v-1M7 10l3 3 3-3M10 3v10"/></svg>
+          Export PDF
+        </button>
       </div>
       <div class="card-body" style="padding:16px 16px 12px">${weekGridHtml}</div>
     </div>

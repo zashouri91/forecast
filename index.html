@@ -5,6 +5,7 @@
 <title>PulsePoint Community Manager Forecast</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <!-- BEGIN REFERENCE -->
 <script>
 // Baked from reference.xlsx by scripts/bake-reference.mjs — do not hand-edit.
@@ -1078,7 +1079,7 @@ function applyValEdits() {
 }
 
 // ── MANAGER REVIEW EXCEL EXPORT ────────────────────────────────────────────
-function exportManagerReview() {
+async function exportManagerReview() {
   const today  = todayStr();
   const days   = Array.from({length:14},(_,i)=>addDays(today,i))
     .filter(d=>{ const w=new Date(d+'T12:00:00').getDay(); return w!==0&&w!==6; })
@@ -1200,25 +1201,9 @@ function exportManagerReview() {
     {wch:22}, // M: Effort Override ← editable
     {wch:36}, // N: Notes
   ];
-  wsRec['!freeze'] = { xSplit:0, ySplit:1 };
-
-  // Dropdown validation for Effort Override
-  wsRec['!dataValidations'] = [{
-    sqref: `${EFFORT_COL}2:${EFFORT_COL}1048576`,
-    type: 'list',
-    formula1: '"1 – Light,2 – Standard,3 – Heavy,4 – Major Event"',
-    showDropDown: false,
-    showInputMessage: true,
-    promptTitle: 'Effort Override',
-    prompt: '1=Light  2=Standard (default)  3=Heavy  4=Major Event\nLeave blank to keep the model default.',
-    showErrorMessage: true,
-    errorTitle: 'Invalid value',
-    error: 'Please select from the dropdown or leave blank.',
-  }];
-  addComment(wsRec, `${EFFORT_COL}1`,
-    'SELECT FROM DROPDOWN — or leave blank for default.\n\n1 – Light: low effort, quick check-in\n2 – Standard: normal meeting or event (default)\n3 – Heavy: complex program, exec visit\n4 – Major Event: all-hands, large conference\n\nDo not edit any other columns.');
-
   wsRec['!freeze'] = {xSplit:0, ySplit:1};
+  addComment(wsRec, `${EFFORT_COL}1`,
+    'SELECT FROM DROPDOWN — or leave blank for default.\n\n1 - Light: low effort, quick check-in\n2 - Standard: normal meeting or event (default)\n3 - Heavy: complex program, exec visit\n4 - Major Event: all-hands, large conference\n\nDo not edit any other columns.');
   XLSX.utils.book_append_sheet(wb, wsRec, 'Records');
 
   // ═══════════════════════════════════════════════════════════
@@ -1248,22 +1233,8 @@ function exportManagerReview() {
   ];
   wsPto['!freeze'] = {xSplit:0, ySplit:1};
 
-  // Dropdown validation for PTO Type
-  wsPto['!dataValidations'] = [{
-    sqref: `${PTO_COL}2:${PTO_COL}1048576`,
-    type: 'list',
-    formula1: '"Full Day,Half Day,WFH"',
-    showDropDown: false,
-    showInputMessage: true,
-    promptTitle: 'PTO Type',
-    prompt: 'Full Day: CM fully out (100% capacity removed)\nHalf Day: 50% capacity removed\nWFH: 50% capacity removed',
-    showErrorMessage: true,
-    errorTitle: 'Invalid value',
-    error: 'Please select Full Day, Half Day, or WFH.',
-  }];
   addComment(wsPto, `${PTO_COL}1`,
     'SELECT FROM DROPDOWN.\n\nFull Day – CM is fully out of office\nHalf Day – CM works partial day\nWFH – CM working from home (reduced capacity)\n\nLeave blank if the CM is in the office.');
-
   XLSX.utils.book_append_sheet(wb, wsPto, 'PTO');
 
   // ═══════════════════════════════════════════════════════════
@@ -1295,15 +1266,103 @@ function exportManagerReview() {
   wsMeta['!cols'] = [{wch:16},{wch:30}];
   XLSX.utils.book_append_sheet(wb, wsMeta, '_ForecastOverlay');
 
-  // ── Download ────────────────────────────────────────────────────────────
-  const buf  = XLSX.write(wb, {bookType:'xlsx', type:'array', cellStyles:true});
-  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.download = `PulsePoint-Manager-Review-${days[0]||'week'}.xlsx`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // ── Download — inject data validations via JSZip then trigger download ─────
+  const _xlsxBytes = XLSX.write(wb, {bookType:'xlsx', type:'array', cellStyles:true});
+  const _filename   = `PulsePoint-Manager-Review-${days[0]||'week'}.xlsx`;
+
+  function _doDownload(blob) {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href = url; a.download = _filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // Helper: inject <dataValidations> XML into one sheet in the zip
+  function _injectDV(xml, sqref, formula1, promptTitle, prompt, errorMsg) {
+    const dv = '<dataValidations count="1">' +
+      '<dataValidation type="list"' +
+      ' sqref="' + sqref + '"' +
+      ' showInputMessage="1"' +
+      ' promptTitle="' + promptTitle + '"' +
+      ' prompt="' + prompt + '"' +
+      ' showErrorMessage="1"' +
+      ' errorTitle="Invalid entry"' +
+      ' error="' + errorMsg + '">' +
+      '<formula1>' + formula1 + '</formula1>' +
+      '</dataValidation></dataValidations>';
+    return xml.replace('</worksheet>', dv + '</worksheet>');
+  }
+
+  if (typeof JSZip !== 'undefined') {
+    JSZip.loadAsync(_xlsxBytes).then(function(zip) {
+      // Parse workbook.xml → sheet name → r:id
+      return zip.file('xl/workbook.xml').async('text').then(function(wbXml) {
+        const sheetMap = {};
+        let m;
+        const sheetRe = /<sheet[^>]*name="([^"]+)"[^>]*r:id="([^"]+)"/g;
+        while ((m = sheetRe.exec(wbXml)) !== null) sheetMap[m[1]] = m[2];
+
+        // Parse rels → r:id → file path
+        return zip.file('xl/_rels/workbook.xml.rels').async('text').then(function(relsXml) {
+          const relsMap = {};
+          const relsRe = /Id="([^"]+)"[^>]*Target="([^"]+)"/g;
+          while ((m = relsRe.exec(relsXml)) !== null) relsMap[m[1]] = m[2];
+
+          // Build sheet name → full zip path
+          const pathFor = function(name) {
+            const rid  = sheetMap[name];
+            const rel  = rid && relsMap[rid];
+            if (!rel) return null;
+            return rel.startsWith('worksheets/') ? 'xl/' + rel : rel;
+          };
+
+          const jobs = [];
+
+          // Records: col M = Effort Override
+          const recPath = pathFor('Records');
+          if (recPath) {
+            jobs.push(zip.file(recPath).async('text').then(function(xml) {
+              zip.file(recPath, _injectDV(xml,
+                'M2:M1048576',
+                '"1 - Light,2 - Standard,3 - Heavy,4 - Major Event"',
+                'Effort Override',
+                '1=Light  2=Standard  3=Heavy  4=Major Event',
+                'Please select from the dropdown or leave blank.'
+              ));
+            }));
+          }
+
+          // PTO: col E = PTO Type
+          const ptoPath = pathFor('PTO');
+          if (ptoPath) {
+            jobs.push(zip.file(ptoPath).async('text').then(function(xml) {
+              zip.file(ptoPath, _injectDV(xml,
+                'E2:E1048576',
+                '"Full Day,Half Day,WFH"',
+                'PTO Type',
+                'Full Day / Half Day / WFH',
+                'Please select Full Day, Half Day, or WFH.'
+              ));
+            }));
+          }
+
+          return Promise.all(jobs);
+        });
+      }).then(function() {
+        return zip.generateAsync({
+          type: 'blob',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          compression: 'DEFLATE',
+        });
+      }).then(_doDownload);
+    }).catch(function(err) {
+      console.warn('JSZip validation injection failed, using plain export:', err);
+      _doDownload(new Blob([_xlsxBytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    });
+  } else {
+    _doDownload(new Blob([_xlsxBytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  }
 }
 
 

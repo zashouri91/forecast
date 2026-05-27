@@ -492,6 +492,10 @@ select:focus,input:focus{border-color:#4338CA;box-shadow:0 0 0 3px rgba(67,56,20
 const state = { step:1, files:[], records:[] };
 // User-overridden CM assignments per site (add/edit/delete via UI)
 let cmOverrides = {}; // { siteName: ['CM1', 'CM2', ...] }
+let managerOverlay = { pto: {}, effortOverrides: {}, narratives: {} };
+// managerOverlay.pto        = { site: { date: count } }
+// managerOverlay.effortOverrides = { recordId: number }
+// managerOverlay.narratives = { site: { week: '', mon:'', tue:'', ... by date } }
 function getCMsForSite(siteName) {
   if (cmOverrides[siteName]) return cmOverrides[siteName];
   return REF()?.bySiteName?.[siteName.toLowerCase()]?.assignedCMs || [];
@@ -674,6 +678,17 @@ function handleFiles(fileList) {
     const reader = new FileReader();
     reader.onload = e => {
       try {
+        // Detect manager overlay file by reserved sheet name
+        if (file.name.endsWith('.xlsx')) {
+          const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+          if (wb.SheetNames.includes('_ForecastOverlay')) {
+            managerOverlay = parseOverlay(wb);
+            renderFileList();
+            updateActionBar();
+            showOverlayBanner();
+            return; // Don't add to data files
+          }
+        }
         const fd = file.name.endsWith('.csv') ? parseCSV(file.name, e.target.result) : parseXLSX(file.name, e.target.result);
         state.files.push(fd);
         renderFileList();
@@ -682,6 +697,26 @@ function handleFiles(fileList) {
     };
     file.name.endsWith('.csv') ? reader.readAsText(file) : reader.readAsArrayBuffer(file);
   });
+}
+
+function showOverlayBanner() {
+  const ptoSites  = Object.keys(managerOverlay.pto).length;
+  const effCount  = Object.keys(managerOverlay.effortOverrides).length;
+  const narSites  = Object.keys(managerOverlay.narratives).length;
+  const existing  = document.getElementById('overlay-banner');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'overlay-banner';
+  banner.style.cssText = 'background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:10px 16px;margin:12px 0;display:flex;align-items:center;gap:10px;font-size:12px;color:#065F46';
+  banner.innerHTML = `<span style="font-size:18px">✅</span>
+    <div>
+      <strong>Manager Review loaded.</strong>
+      Applied: ${ptoSites} site(s) with PTO · ${effCount} effort override(s) · ${narSites} site narrative(s).
+      <span style="color:#94A3B8;margin-left:8px">Re-upload data files to see updated dashboard.</span>
+    </div>
+    <button onclick="managerOverlay={pto:{},effortOverrides:{},narratives:{}};this.closest('#overlay-banner').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#94A3B8;font-size:16px" title="Clear overlay">✕</button>`;
+  const zone = document.getElementById('upload-zone');
+  if (zone) zone.insertAdjacentElement('afterend', banner);
 }
 
 function parseXLSX(name, buffer) {
@@ -999,7 +1034,18 @@ function setPTO(site, date, count) {
 }
 
 function getPTO(site, date) {
+  // Overlay (manager review sheet) takes precedence over manual entry
+  if (managerOverlay.pto[site] && managerOverlay.pto[site][date] !== undefined)
+    return managerOverlay.pto[site][date];
   return (ptoDays[site] && ptoDays[site][date]) ? ptoDays[site][date] : 0;
+}
+
+function recordId(r) {
+  // Stable hash for reconciling overlay effort overrides back to records
+  const key = [r._canonicalSite || r.site || '', r.date || '', r._type || '', (r.event_name || r.vip || '').slice(0, 40)].join('|');
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (Math.imul(31, h) + key.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36).padStart(8, '0');
 }
 
 function getValidationWindow() {
@@ -1029,6 +1075,186 @@ function applyValEdits() {
     if (!state.records[i]) return;
     Object.assign(state.records[i], edits);
   });
+}
+
+// ── MANAGER REVIEW EXCEL EXPORT ────────────────────────────────────────────
+function exportManagerReview() {
+  const today = todayStr();
+  const days = Array.from({length:14},(_,i)=>addDays(today,i))
+    .filter(d=>{ const w=new Date(d+'T12:00:00').getDay(); return w!==0&&w!==6; })
+    .slice(0,5);
+
+  const recs = state.records.filter(r => r._type !== 'space');
+  const locations = REF() ? REF().sites.map(s=>s.siteName)
+    : [...new Set(recs.map(r=>r._canonicalSite||r.site).filter(Boolean))].sort();
+
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: Records (editable: Effort Override) ──
+  const recHead = ['_id','Site','Date','Day','Type','Name / Traveler','VIP','Attendees','Status','Room','Catering','Budget','Effort Override (leave blank = default)','Notes'];
+  const recRows = [recHead];
+  recs.forEach(r => {
+    const dt = r.date ? new Date(r.date+'T12:00:00') : null;
+    recRows.push([
+      recordId(r),
+      r._canonicalSite||r.site||'',
+      r.date||'',
+      dt ? dt.toLocaleDateString('en-US',{weekday:'long'}) : '',
+      r._type||'',
+      r.event_name||r.vip||'',
+      r.vip||'',
+      r.attendees||'',
+      r.status||'',
+      r.room||'',
+      r.catering||'',
+      r.budget||'',
+      '', // Effort Override — editable by manager
+      r.notes||'',
+    ]);
+  });
+  const wsRec = XLSX.utils.aoa_to_sheet(recRows);
+  wsRec['!cols'] = [{wch:10},{wch:20},{wch:12},{wch:12},{wch:12},{wch:34},{wch:26},{wch:10},{wch:14},{wch:20},{wch:30},{wch:12},{wch:30},{wch:36}];
+  wsRec['!freeze'] = {xSplit:0,ySplit:1};
+  XLSX.utils.book_append_sheet(wb, wsRec, 'Records');
+
+  // ── Sheet 2: PTO (one row per site × day × CM, editable: Full Day / Half Day) ──
+  const ptoHead = ['Site','Date','Day','CM Name','PTO Type (Full Day / Half Day / WFH)','Notes'];
+  const ptoRows = [ptoHead];
+  locations.forEach(loc => {
+    const cms = getCMsForSite(loc);
+    days.forEach(d => {
+      const dt = new Date(d+'T12:00:00');
+      const dayName = dt.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+      if (cms.length) {
+        cms.forEach(cm => ptoRows.push([loc,d,dayName,cm,'','']));
+      } else {
+        ptoRows.push([loc,d,dayName,'','','']);
+      }
+    });
+  });
+  const wsPto = XLSX.utils.aoa_to_sheet(ptoRows);
+  wsPto['!cols'] = [{wch:20},{wch:12},{wch:22},{wch:26},{wch:34},{wch:30}];
+  wsPto['!freeze'] = {xSplit:0,ySplit:1};
+  XLSX.utils.book_append_sheet(wb, wsPto, 'PTO');
+
+  // ── Sheet 3: Narratives (week summary + daily per site) ──
+  const dayMeta = days.map(d => {
+    const dt = new Date(d+'T12:00:00');
+    return { d, label: dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) };
+  });
+  const narHead = ['Site','Week Summary', ...dayMeta.map(h=>h.label+' Narrative')];
+  const narRows = [narHead];
+  locations.forEach(loc => narRows.push([loc,'', ...days.map(()=>'')]));
+  const wsNar = XLSX.utils.aoa_to_sheet(narRows);
+  wsNar['!cols'] = [{wch:20},{wch:50}, ...days.map(()=>({wch:44}))];
+  wsNar['!freeze'] = {xSplit:1,ySplit:1};
+  XLSX.utils.book_append_sheet(wb, wsNar, 'Narratives');
+
+  // ── Sheet 4: _ForecastOverlay (detection marker — do not edit) ──
+  const wsMeta = XLSX.utils.aoa_to_sheet([
+    ['PulsePoint Forecast — Manager Review Sheet'],
+    ['Generated', new Date().toISOString()],
+    ['Week Of', days[0]||''],
+    ['Week End', days[days.length-1]||''],
+    ['_marker','ForecastOverlay_v1'],
+    ['',''],
+    ['Instructions:',''],
+    ['Records sheet:','Fill Effort Override column only (1=light, 2=normal, 3=heavy, 4=major event). Leave blank for default.'],
+    ['PTO sheet:','Fill PTO Type column: Full Day, Half Day, or WFH for each CM on each day they are out.'],
+    ['Narratives sheet:','Type a week summary and/or daily narrative for each site. These will appear in the dashboard and PDF export.'],
+    ['Re-upload:','Upload this file alongside your original data files in Step 1. The app will detect and apply all manager inputs automatically.'],
+  ]);
+  wsMeta['!cols'] = [{wch:20},{wch:80}];
+  XLSX.utils.book_append_sheet(wb, wsMeta, '_ForecastOverlay');
+
+  const buf  = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `PulsePoint-Manager-Review-${days[0]||'week'}.xlsx`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── MANAGER OVERLAY PARSER ──────────────────────────────────────────────────
+function parseOverlay(wb) {
+  const overlay = { pto: {}, effortOverrides: {}, narratives: {} };
+
+  // ── PTO sheet ──
+  const wsPto = wb.Sheets['PTO'];
+  if (wsPto) {
+    const rows = XLSX.utils.sheet_to_json(wsPto, {header:1,defval:''});
+    const head = (rows[0]||[]).map(h=>String(h).toLowerCase().trim());
+    const iSite = head.findIndex(h=>h==='site');
+    const iDate = head.findIndex(h=>h==='date');
+    const iCM   = head.findIndex(h=>h.includes('cm name'));
+    const iPTO  = head.findIndex(h=>h.includes('pto type'));
+    rows.slice(1).forEach(row => {
+      const site = String(row[iSite]||'').trim();
+      const date = String(row[iDate]||'').trim();
+      const pto  = String(row[iPTO] ||'').trim().toLowerCase();
+      if (!site||!date||!pto) return;
+      if (!overlay.pto[site]) overlay.pto[site] = {};
+      const prev = overlay.pto[site][date] || 0;
+      // Full Day = 1 CM out, Half Day = 0.5
+      const val = pto.includes('full') ? 1 : pto.includes('half') || pto.includes('wfh') ? 0.5 : 0;
+      overlay.pto[site][date] = prev + val;
+    });
+  }
+
+  // ── Records sheet — effort overrides ──
+  const wsRec = wb.Sheets['Records'];
+  if (wsRec) {
+    const rows = XLSX.utils.sheet_to_json(wsRec, {header:1,defval:''});
+    const head = (rows[0]||[]).map(h=>String(h).toLowerCase().trim());
+    const iId  = head.findIndex(h=>h==='_id');
+    const iEff = head.findIndex(h=>h.includes('effort'));
+    if (iId>=0 && iEff>=0) {
+      rows.slice(1).forEach(row => {
+        const id  = String(row[iId]||'').trim();
+        const eff = parseFloat(String(row[iEff]||''));
+        if (id && !isNaN(eff) && eff>0) overlay.effortOverrides[id] = eff;
+      });
+    }
+  }
+
+  // ── Narratives sheet ──
+  // Compute the week's business days from the _ForecastOverlay metadata
+  let weekDays = [];
+  const wsMetaSheet = wb.Sheets['_ForecastOverlay'];
+  if (wsMetaSheet) {
+    const metaRows = XLSX.utils.sheet_to_json(wsMetaSheet, {header:1,defval:''});
+    const weekRow = metaRows.find(r => String(r[0]).trim() === 'Week Of');
+    if (weekRow) {
+      let d = new Date(String(weekRow[1]).trim() + 'T12:00:00');
+      let safety = 0;
+      while (weekDays.length < 5 && safety++ < 14) {
+        if (d.getDay() !== 0 && d.getDay() !== 6) weekDays.push(d.toISOString().slice(0,10));
+        d = new Date(d.getTime() + 86400000);
+      }
+    }
+  }
+
+  const wsNar = wb.Sheets['Narratives'];
+  if (wsNar) {
+    const rows = XLSX.utils.sheet_to_json(wsNar, {header:1,defval:''});
+    // head[0]=Site, head[1]=Week Summary, head[2..N]=day narratives (one per weekday)
+    const dayCols = (rows[0]||[]).slice(2).map((_, i) => i+2);
+    rows.slice(1).forEach(row => {
+      const site = String(row[0]||'').trim();
+      const week = String(row[1]||'').trim();
+      if (!site) return;
+      if (!overlay.narratives[site]) overlay.narratives[site] = { week:'', days:{} };
+      overlay.narratives[site].week = week;
+      dayCols.forEach((col, i) => {
+        const val = String(row[col]||'').trim();
+        if (val && weekDays[i]) overlay.narratives[site].days[weekDays[i]] = val;
+      });
+    });
+  }
+
+  return overlay;
 }
 
 function renderValidationStep() {
@@ -1205,6 +1431,10 @@ function renderValidationStep() {
           </select>
         </div>
         <button class="btn btn-sm btn-secondary" onclick="exportValidationCSV()">⬇ Export CSV</button>
+        <button class="btn btn-sm" style="background:#4338CA;color:#fff;border-color:#4338CA" onclick="exportManagerReview()">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M4 16v1a1 1 0 001 1h10a1 1 0 001-1v-1M7 10l3 3 3-3M10 3v10"/></svg>
+          Export Manager Review
+        </button>
       </div>
     </div>
 
@@ -1413,6 +1643,18 @@ function buildSiteDayStats(records) {
     } else {
       // space reservations intentionally excluded from capacity load in this model
     }
+    // Apply manager effort override: compute delta vs default weight and accumulate
+    if (r._type !== 'space') {
+      const rid = recordId(r);
+      const effOvr = managerOverlay.effortOverrides[rid];
+      if (effOvr !== undefined) {
+        const def = r._type==='meeting' ? MODEL.wMeeting
+                  : r._type==='event'   ? MODEL.wEvent
+                  : r._type==='traveler'? MODEL.wTraveler * mult
+                  : 0;
+        row.effortDelta = (row.effortDelta||0) + (effOvr - def);
+      }
+    }
   });
 
   // compute load + utilization
@@ -1433,7 +1675,7 @@ function buildSiteDayStats(records) {
         (row.attendees / MODEL.attendeeDivisor) +
         (row.catering * MODEL.wCatering) +
         (row.travelers * MODEL.wTraveler)
-      );
+      ) + (row.effortDelta || 0); // manager effort overrides delta
       const rawUtil = cap > 0 ? (row.load / cap) : 0;
       // Baseline floor: CMs are never at 0% even with zero bookings.
       // Accounts for site walks, supply checks, ad-hoc associate requests, etc.
@@ -1973,12 +2215,14 @@ function renderWeekAheadGrid(recs, stats) {
   locations.forEach((loc, idx) => {
     html += `<tr style="background:${idx%2===0?'#FAFAFA':'#FFFFFF'};vertical-align:top">`;
     const cmList = getCMsForSite(loc);
+    const weekNarr = managerOverlay.narratives[loc]?.week || '';
     html += `<td style="padding:10px 14px;border-bottom:1px solid #F1F5F9;border-right:1px solid #F1F5F9">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px">
         <div style="font-size:12px;font-weight:700;color:#1E293B">${escapeHtml(loc)}</div>
         <button onclick="openCMEditor(window.__weekAheadSites[${idx}])" title="Edit CMs" style="background:none;border:none;cursor:pointer;color:#CBD5E1;padding:0;flex-shrink:0;line-height:1;font-size:13px" onmouseover="this.style.color='#6366F1'" onmouseout="this.style.color='#CBD5E1'">✎</button>
       </div>
       ${cmList.length ? `<div style="font-size:10px;color:#94A3B8;margin-top:2px">${cmList.map(escapeHtml).join(', ')}</div>` : ''}
+      ${weekNarr ? `<div style="font-size:9px;font-style:italic;color:#94A3B8;margin-top:4px;padding-top:3px;border-top:1px dashed #E2E8F0;line-height:1.4">${escapeHtml(weekNarr)}</div>` : ''}
     </td>`;
 
     dayMeta.forEach(h => {
@@ -2018,13 +2262,19 @@ function renderWeekAheadGrid(recs, stats) {
       const spaceItem = spaceBreakdown
         ? `<div style="padding-top:4px;margin-top:3px;border-top:1px solid rgba(0,0,0,.08)">${spaceBreakdown}</div>` : '';
 
+      const dailyNarrative = managerOverlay.narratives[loc]?.days?.[h.d] || '';
+      const narrativeItem = dailyNarrative
+        ? `<div style="margin-top:4px;padding:4px 6px;background:#F8FAFC;border-radius:4px;border-left:2px solid #CBD5E1">
+            <div style="font-size:9px;font-style:italic;color:#64748B;line-height:1.4">${escapeHtml(dailyNarrative)}</div>
+          </div>` : '';
+
       html += `<td style="${tdBase}">
         <div style="border-left:3px solid ${c.border}">
           <div style="background:${c.headerBg};padding:5px 8px;display:flex;align-items:center;justify-content:space-between;gap:6px">
             <span style="font-size:11px;font-weight:700;color:${c.text}">${utilPct}%</span>
             <span style="font-size:9px;font-weight:700;color:${c.text};text-transform:uppercase;letter-spacing:.05em;opacity:.8">${c.label}</span>
           </div>
-          <div style="padding:4px 8px 6px">${recItems}${ptoItem}${spaceItem}</div>
+          <div style="padding:4px 8px 6px">${recItems}${ptoItem}${spaceItem}${narrativeItem}</div>
         </div>
       </td>`;
     });
@@ -2170,6 +2420,12 @@ function exportWeekAheadPDF() {
       if (ptoOut) items += `<div style="display:flex;gap:5px;align-items:center;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.04)">
         <span style="width:6px;height:6px;border-radius:50%;background:#F59E0B;flex-shrink:0"></span>
         <span style="font-size:9px;font-weight:600;color:#92400E">${ptoOut} CM on PTO</span>
+      </div>`;
+
+      // Manager narrative
+      const pdfNarrative = managerOverlay.narratives[loc]?.days?.[h.d] || '';
+      if (pdfNarrative) items += `<div style="margin-top:4px;padding:3px 5px;background:#F8FAFC;border-left:2px solid #CBD5E1;border-radius:2px">
+        <div style="font-size:7.5px;font-style:italic;color:#64748b;line-height:1.4">${escapeHtml(pdfNarrative)}</div>
       </div>`;
 
       // Space type breakdown with XX/total (%)

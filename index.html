@@ -2300,76 +2300,47 @@ function exportWeekAheadPDF() {
     </div>`;
   }
 
-  // ── PAGE 2: Travelers, Events & VIP Meetings ──
-  const vipTravelerPageHtml = (() => {
+  // ── PAGE 2: All Activity — Travelers, Events & Meetings (combined) ──
+  const detailPageHtml = (() => {
     const typePill = t => {
-      const cfg = { traveler:['#D1FAE5','#065F46','Traveler'], event:['#FCE7F3','#9D174D','Event'], meeting:['#EEF2FF','#3730A3','VIP Mtg'] };
+      const cfg = {
+        traveler: ['#D1FAE5','#065F46','Traveler'],
+        event:    ['#FCE7F3','#9D174D','Event'],
+        meeting:  ['#EEF2FF','#3730A3','Meeting'],
+      };
       const [bg, fg, label] = cfg[t] || ['#F1F5F9','#475569', t];
       return `<span style="background:${bg};color:${fg};font-size:7px;font-weight:700;padding:1px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">${label}</span>`;
     };
 
     const rowRenderer = (r, bg) => {
-      const name  = escapeHtml(r.event_name || r.vip || '—');
-      const vip   = hasVip(r) ? `<span style="color:#7C3AED;font-weight:700">★ ${escapeHtml(String(r.vip))}</span>` : '';
-      const att   = r.attendees > 0 ? r.attendees : '—';
-      const cat   = r.catering ? escapeHtml(String(r.catering).slice(0, 70)) : '—';
-      const notes = r.notes ? escapeHtml(String(r.notes).slice(0, 80)) : '';
-      return `<tr style="background:${bg}">
-        <td style="padding:5px 10px 5px 24px;border-bottom:1px solid #f1f5f9">${typePill(r._type)}</td>
-        <td style="padding:5px 14px;font-size:9px;font-weight:600;color:#1e293b;border-bottom:1px solid #f1f5f9">${name}</td>
-        <td style="padding:5px 14px;font-size:9px;border-bottom:1px solid #f1f5f9">${vip}</td>
-        <td style="padding:5px 14px;font-size:9px;color:#374151;text-align:center;border-bottom:1px solid #f1f5f9">${att}</td>
-        <td style="padding:5px 14px;font-size:8.5px;color:#64748b;border-bottom:1px solid #f1f5f9">${cat}</td>
-        <td style="padding:5px 14px;font-size:8px;color:#94a3b8;border-bottom:1px solid #f1f5f9">${notes}</td>
-      </tr>`;
-    };
-
-    const colHeaders = th => [th('Type'), th('Name / Traveler'), th('VIP Attendee'), th('# Ppl'), th('Catering'), th('Notes')].join('');
-
-    return buildGroupedTable(
-      r => r._type !== 'space' && (r._type === 'traveler' || r._type === 'event' || (r._type === 'meeting' && hasVip(r))),
-      rowRenderer, colHeaders,
-      'Travelers, Events & VIP Meetings',
-      'Grouped by day then location. Includes all travelers, all events, and meetings with VIP attendees.'
-    );
-  })();
-
-  // ── PAGE 3: All Meetings & Events ──
-  const meetingsEventsPageHtml = (() => {
-    const typePill2 = t => {
-      const cfg = { event:['#FCE7F3','#9D174D','Event'], meeting:['#EEF2FF','#3730A3','Meeting'] };
-      const [bg, fg, label] = cfg[t] || ['#F1F5F9','#475569', t];
-      return `<span style="background:${bg};color:${fg};font-size:7px;font-weight:700;padding:1px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">${label}</span>`;
-    };
-
-    const rowRenderer2 = (r, bg) => {
-      const name  = escapeHtml(r.event_name || '—');
-      const vip   = hasVip(r) ? `<span style="color:#7C3AED;font-weight:700">★ ${escapeHtml(String(r.vip))}</span>` : '';
-      const att   = r.attendees > 0 ? r.attendees : '—';
-      const room  = r.room ? escapeHtml(String(r.room).slice(0, 35)) : '—';
-      const cat   = r.catering ? escapeHtml(String(r.catering).slice(0, 60)) : '—';
-      let budget  = '—';
+      const name   = escapeHtml(r.event_name || r.vip || '—');
+      const vip    = hasVip(r) ? `<span style="color:#7C3AED;font-weight:700">★ ${escapeHtml(String(r.vip))}</span>` : '';
+      const att    = r.attendees > 0 ? r.attendees : '—';
+      const room   = r.room ? escapeHtml(String(r.room).slice(0, 35)) : '—';
+      const cat    = r.catering ? escapeHtml(String(r.catering).slice(0, 60)) : '—';
+      let budget   = '—';
       if (r.budget) { const n = Number(String(r.budget).replace(/[^0-9.]/g,'')); if (!isNaN(n)&&n>0) budget=`$${n.toLocaleString()}`; }
       const status = r.status ? escapeHtml(r.status) : '';
+      const notes  = r.notes  ? escapeHtml(String(r.notes).slice(0, 60)) : '';
       return `<tr style="background:${bg}">
-        <td style="padding:5px 10px 5px 24px;border-bottom:1px solid #f1f5f9">${typePill2(r._type)}</td>
+        <td style="padding:5px 10px 5px 24px;border-bottom:1px solid #f1f5f9">${typePill(r._type)}</td>
         <td style="padding:5px 14px;font-size:9px;font-weight:600;color:#1e293b;border-bottom:1px solid #f1f5f9">${name}</td>
         <td style="padding:5px 14px;font-size:9px;border-bottom:1px solid #f1f5f9">${vip}</td>
         <td style="padding:5px 14px;font-size:9px;color:#374151;text-align:center;border-bottom:1px solid #f1f5f9">${att}</td>
         <td style="padding:5px 14px;font-size:8.5px;color:#64748b;border-bottom:1px solid #f1f5f9;white-space:nowrap">${room}</td>
         <td style="padding:5px 14px;font-size:8.5px;color:#64748b;border-bottom:1px solid #f1f5f9">${cat}</td>
         <td style="padding:5px 14px;font-size:8.5px;color:#059669;font-weight:600;border-bottom:1px solid #f1f5f9;white-space:nowrap">${budget}</td>
-        <td style="padding:5px 14px;font-size:8px;color:#94a3b8;border-bottom:1px solid #f1f5f9">${status}</td>
+        <td style="padding:5px 14px;font-size:8px;color:#94a3b8;border-bottom:1px solid #f1f5f9">${status || notes}</td>
       </tr>`;
     };
 
-    const colHeaders2 = th => [th('Type'), th('Meeting / Event Name'), th('VIP Attendee'), th('# Ppl'), th('Room'), th('Catering'), th('Budget'), th('Status')].join('');
+    const colHeaders = th => [th('Type'), th('Name / Traveler'), th('VIP Attendee'), th('# Ppl'), th('Room'), th('Catering'), th('Budget'), th('Status / Notes')].join('');
 
     return buildGroupedTable(
-      r => r._type === 'meeting' || r._type === 'event',
-      rowRenderer2, colHeaders2,
-      'Meetings & Events — Full Detail',
-      'All meetings and events for the week, grouped by day then location.'
+      r => r._type !== 'space',
+      rowRenderer, colHeaders,
+      'Week Ahead — Activity Detail',
+      'All travelers, events, and meetings for the week. Grouped by day then location. Sorted by type within each site.'
     );
   })();
 
@@ -2499,8 +2470,7 @@ function exportWeekAheadPDF() {
     <span>Capacity model: ${MODEL.meetingEqPerDay} mtg-eq / CM / day &nbsp;·&nbsp; Baseline floor: ${MODEL.baselineLoad}%</span>
   </div>
 
-  ${vipTravelerPageHtml}
-  ${meetingsEventsPageHtml}
+  ${detailPageHtml}
   <!-- Footer -->
   <div class="footer">
     <span>Generated ${escapeHtml(generatedAt)} &nbsp;·&nbsp; PulsePoint Community Manager Operations</span>

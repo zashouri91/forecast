@@ -5,7 +5,7 @@
 <title>PulsePoint Community Manager Forecast</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <!-- BEGIN REFERENCE -->
 <script>
 // Baked from reference.xlsx by scripts/bake-reference.mjs — do not hand-edit.
@@ -1294,75 +1294,92 @@ async function exportManagerReview() {
     return xml.replace('</worksheet>', dv + '</worksheet>');
   }
 
-  if (typeof JSZip !== 'undefined') {
-    JSZip.loadAsync(_xlsxBytes).then(function(zip) {
-      // Parse workbook.xml → sheet name → r:id
-      return zip.file('xl/workbook.xml').async('text').then(function(wbXml) {
-        const sheetMap = {};
-        let m;
-        const sheetRe = /<sheet[^>]*name="([^"]+)"[^>]*r:id="([^"]+)"/g;
-        while ((m = sheetRe.exec(wbXml)) !== null) sheetMap[m[1]] = m[2];
-
-        // Parse rels → r:id → file path
-        return zip.file('xl/_rels/workbook.xml.rels').async('text').then(function(relsXml) {
-          const relsMap = {};
-          const relsRe = /Id="([^"]+)"[^>]*Target="([^"]+)"/g;
-          while ((m = relsRe.exec(relsXml)) !== null) relsMap[m[1]] = m[2];
-
-          // Build sheet name → full zip path
-          const pathFor = function(name) {
-            const rid  = sheetMap[name];
-            const rel  = rid && relsMap[rid];
-            if (!rel) return null;
-            return rel.startsWith('worksheets/') ? 'xl/' + rel : rel;
-          };
-
-          const jobs = [];
-
-          // Records: col M = Effort Override
-          const recPath = pathFor('Records');
-          if (recPath) {
-            jobs.push(zip.file(recPath).async('text').then(function(xml) {
-              zip.file(recPath, _injectDV(xml,
-                'M2:M1048576',
-                '"1 - Light,2 - Standard,3 - Heavy,4 - Major Event"',
-                'Effort Override',
-                '1=Light  2=Standard  3=Heavy  4=Major Event',
-                'Please select from the dropdown or leave blank.'
-              ));
-            }));
-          }
-
-          // PTO: col E = PTO Type
-          const ptoPath = pathFor('PTO');
-          if (ptoPath) {
-            jobs.push(zip.file(ptoPath).async('text').then(function(xml) {
-              zip.file(ptoPath, _injectDV(xml,
-                'E2:E1048576',
-                '"Full Day,Half Day,WFH"',
-                'PTO Type',
-                'Full Day / Half Day / WFH',
-                'Please select Full Day, Half Day, or WFH.'
-              ));
-            }));
-          }
-
-          return Promise.all(jobs);
-        });
-      }).then(function() {
-        return zip.generateAsync({
-          type: 'blob',
-          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          compression: 'DEFLATE',
-        });
-      }).then(_doDownload);
-    }).catch(function(err) {
-      console.warn('JSZip validation injection failed, using plain export:', err);
-      _doDownload(new Blob([_xlsxBytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
-    });
-  } else {
+  if (typeof JSZip === 'undefined') {
+    console.error('[PulsePoint] JSZip not loaded — no dropdown validation. Check CDN.');
     _doDownload(new Blob([_xlsxBytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    return;
   }
+
+  JSZip.loadAsync(_xlsxBytes).then(function(zip) {
+    console.log('[PulsePoint] XLSX zip files:', Object.keys(zip.files));
+
+    return zip.file('xl/workbook.xml').async('text').then(function(wbXml) {
+      console.log('[PulsePoint] workbook.xml snippet:', wbXml.slice(0, 600));
+
+      // Extract sheet name → r:id (works regardless of attribute order)
+      const sheetMap = {};
+      (wbXml.match(/<sheet [^/]*/g) || []).forEach(function(node) {
+        const nm  = (node.match(/name="([^"]*)"/)  || [])[1];
+        const rid = (node.match(/r:id="([^"]*)"/)  || [])[1];
+        if (nm && rid) sheetMap[nm] = rid;
+      });
+      console.log('[PulsePoint] sheetMap:', sheetMap);
+
+      return zip.file('xl/_rels/workbook.xml.rels').async('text').then(function(relsXml) {
+        const relsMap = {};
+        (relsXml.match(/<Relationship [^/]*/g) || []).forEach(function(node) {
+          const id     = (node.match(/Id="([^"]*)"/)     || [])[1];
+          const target = (node.match(/Target="([^"]*)"/) || [])[1];
+          if (id && target) relsMap[id] = target;
+        });
+        console.log('[PulsePoint] relsMap:', relsMap);
+
+        function pathFor(name) {
+          const rid = sheetMap[name];
+          const rel = rid && relsMap[rid];
+          if (!rel) { console.warn('[PulsePoint] no rel for:', name); return null; }
+          // rel is like "worksheets/sheet2.xml" → prepend "xl/"
+          return 'xl/' + rel;
+        }
+
+        const jobs = [];
+
+        const recPath = pathFor('Records');
+        console.log('[PulsePoint] Records path:', recPath, 'exists:', !!(recPath && zip.file(recPath)));
+        if (recPath && zip.file(recPath)) {
+          jobs.push(zip.file(recPath).async('text').then(function(xml) {
+            const patched = _injectDV(xml,
+              'M2:M1048576',
+              '"1 - Light,2 - Standard,3 - Heavy,4 - Major Event"',
+              'Effort Override',
+              '1=Light  2=Standard  3=Heavy  4=Major Event',
+              'Please select from the dropdown or leave blank.');
+            console.log('[PulsePoint] Records DV injected:', patched.includes('dataValidation'));
+            zip.file(recPath, patched);
+          }));
+        }
+
+        const ptoPath = pathFor('PTO');
+        console.log('[PulsePoint] PTO path:', ptoPath, 'exists:', !!(ptoPath && zip.file(ptoPath)));
+        if (ptoPath && zip.file(ptoPath)) {
+          jobs.push(zip.file(ptoPath).async('text').then(function(xml) {
+            const patched = _injectDV(xml,
+              'E2:E1048576',
+              '"Full Day,Half Day,WFH"',
+              'PTO Type',
+              'Full Day / Half Day / WFH',
+              'Please select Full Day, Half Day, or WFH.');
+            console.log('[PulsePoint] PTO DV injected:', patched.includes('dataValidation'));
+            zip.file(ptoPath, patched);
+          }));
+        }
+
+        return Promise.all(jobs);
+      });
+    }).then(function() {
+      return zip.generateAsync({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        compression: 'DEFLATE',
+      });
+    }).then(function(blob) {
+      console.log('[PulsePoint] Export complete, size:', blob.size);
+      _doDownload(blob);
+    });
+  }).catch(function(err) {
+    console.error('[PulsePoint] JSZip injection error:', err);
+    _doDownload(new Blob([_xlsxBytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  });
 }
 
 
@@ -2559,9 +2576,11 @@ function exportWeekAheadPDF() {
     const refSite = REF()?.bySiteName?.[loc.toLowerCase()];
     const cmList = getCMsForSite(loc);
 
+    const pdfWeekNarr = managerOverlay.narratives[loc]?.week || '';
     let cells = `<td style="padding:10px 12px;border-right:2px solid #e2e8f0;background:${rowBg};vertical-align:top;min-width:130px">
       <div style="font-size:12px;font-weight:800;color:#1e293b;letter-spacing:-.02em">${escapeHtml(loc)}</div>
       ${cmList.length ? `<div style="font-size:8.5px;color:#94a3b8;margin-top:2px;line-height:1.5">${cmList.map(cm => `<span style="white-space:nowrap;display:block">${escapeHtml(cm)}</span>`).join('')}</div>` : ''}
+      ${pdfWeekNarr ? `<div style="margin-top:5px;padding:3px 5px 4px;background:#F8FAFC;border-left:2px solid #CBD5E1;border-radius:2px"><div style="font-size:7.5px;font-style:italic;color:#475569;line-height:1.4">${escapeHtml(pdfWeekNarr)}</div></div>` : ''}
     </td>`;
 
     dayMeta.forEach(h => {

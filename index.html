@@ -1832,7 +1832,7 @@ function renderWeekAheadGrid(recs, stats) {
   // Helper to render space type breakdown as compact text lines
   function spaceBreakdownHtml(typeMap, refSite, small) {
     if (!typeMap || !Object.keys(typeMap).length) return '';
-    const CAP_KEY = { 'Workstation':'workstations','Private Office':'privateOffices','Meeting Room':'meetingRooms','Capsule':'capsules' };
+    const CAP_KEY = { 'Workstation':'workstations','Private Office':'privateOffices','Staff VP Office':'privateOffices','VP Office':'privateOffices','Focus Room':'meetingRooms','Meeting Room':'meetingRooms','Capsule':'capsules' };
     const fs = small ? '8px' : '9px';
     return Object.entries(typeMap).map(([t, n]) => {
       const capKey = CAP_KEY[t];
@@ -1978,8 +1978,17 @@ function exportWeekAheadPDF() {
   const stats  = buildSiteDayStats(allRecs);
   const locations = [...new Set(allRecs.filter(r => r._canonicalSite).map(r => r._canonicalSite))].sort();
 
-  // Amenity type → reference capacity field
-  const CAP_KEY = { 'Workstation':'workstations','Private Office':'privateOffices','Meeting Room':'meetingRooms','Capsule':'capsules' };
+  // Amenity type → reference capacity field (covers actual AMENITY_TYPE strings in the Space Report)
+  const CAP_KEY = {
+    'Workstation':     'workstations',
+    'Private Office':  'privateOffices',
+    'Staff VP Office': 'privateOffices',
+    'VP Office':       'privateOffices',
+    'Focus Room':      'meetingRooms',
+    'Meeting Room':    'meetingRooms',
+    'Capsule':         'capsules',
+  };
+  const MAX_RECS = 5; // cap records per cell; show "+N more" if overflow
 
   const dayMeta = days.map(d => {
     const dt = new Date(d + 'T12:00:00');
@@ -2051,25 +2060,30 @@ function exportWeekAheadPDF() {
       const c       = C[status] || C.normal;
       const utilPct = row ? Math.round(row.util * 100) : (MODEL.baselineLoad || 25);
 
-      // Record rows
+      // Record rows — capped at MAX_RECS to keep cells compact
       let items = '';
-      dayRecs.forEach(r => {
+      const visRecs  = dayRecs.slice(0, MAX_RECS);
+      const overflow = dayRecs.length - visRecs.length;
+      visRecs.forEach(r => {
         const name  = r.event_name || r.vip || '—';
-        const trunc = name.length > 36 ? name.slice(0, 34) + '…' : name;
+        const trunc = name.length > 34 ? name.slice(0, 32) + '…' : name;
         const dot   = r._type === 'event' ? '#EC4899' : r._type === 'traveler' ? '#10B981' : '#3B82F6';
         const meta  = [];
         if (r.attendees > 0) meta.push(`${r.attendees} ppl`);
         if (hasVip(r) && r._type !== 'traveler') {
-          const vn = String(r.vip); meta.push(`★ ${vn.length > 24 ? vn.slice(0,22)+'…' : vn}`);
+          const vn = String(r.vip); meta.push(`★ ${vn.length > 22 ? vn.slice(0,20)+'…' : vn}`);
         }
-        items += `<div style="display:flex;gap:5px;align-items:flex-start;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.04)">
-          <span style="width:6px;height:6px;border-radius:50%;background:${dot};flex-shrink:0;margin-top:3px"></span>
+        items += `<div style="display:flex;gap:4px;align-items:flex-start;padding:2px 0;border-bottom:1px solid rgba(0,0,0,.04)">
+          <span style="width:5px;height:5px;border-radius:50%;background:${dot};flex-shrink:0;margin-top:3px"></span>
           <div style="min-width:0">
-            <div style="font-size:9.5px;font-weight:600;color:#1e293b;line-height:1.3;word-break:break-word">${escapeHtml(trunc)}</div>
-            ${meta.length ? `<div style="font-size:8px;color:#64748b;margin-top:1px">${escapeHtml(meta.join(' · '))}</div>` : ''}
+            <div style="font-size:8.5px;font-weight:600;color:#1e293b;line-height:1.3">${escapeHtml(trunc)}</div>
+            ${meta.length ? `<div style="font-size:7.5px;color:#64748b;margin-top:1px">${escapeHtml(meta.join(' · '))}</div>` : ''}
           </div>
         </div>`;
       });
+      if (overflow > 0) {
+        items += `<div style="font-size:8px;color:#94a3b8;font-style:italic;padding-top:2px">+${overflow} more</div>`;
+      }
 
       if (ptoOut) items += `<div style="display:flex;gap:5px;align-items:center;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.04)">
         <span style="width:6px;height:6px;border-radius:50%;background:#F59E0B;flex-shrink:0"></span>
@@ -2112,9 +2126,20 @@ function exportWeekAheadPDF() {
 <meta charset="utf-8">
 <title>PulsePoint CM Forecast — Week Ahead</title>
 <style>
-  @page { size: 11in 8.5in; margin: 0.45in 0.4in; }
+  /* Landscape: belt-and-suspenders approach */
+  @page { size: landscape; margin: 0.4in 0.4in; }
+  @page { size: 11in 8.5in; margin: 0.4in 0.4in; }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; background: #fff; color: #1e293b; }
+
+  /* On-screen landscape prompt — hidden when printing */
+  .landscape-prompt {
+    background: #FEF9C3; border: 1px solid #FCD34D; border-radius: 6px;
+    padding: 8px 14px; margin-bottom: 14px; font-size: 11px; color: #92400E;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .landscape-prompt strong { font-weight: 700; }
 
   /* ── Header ── */
   .hdr { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 3px solid #4338CA; margin-bottom: 14px; }
@@ -2144,10 +2169,17 @@ function exportWeekAheadPDF() {
 
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .landscape-prompt { display: none !important; }
   }
 </style>
 </head>
 <body>
+
+  <!-- Landscape reminder (screen only, hidden on print) -->
+  <div class="landscape-prompt">
+    <span style="font-size:14px">↔️</span>
+    <span><strong>Before printing:</strong> In the print dialog, set Orientation to <strong>Landscape</strong> and Margins to <strong>Minimum</strong> for best results.</span>
+  </div>
 
   <!-- Header -->
   <div class="hdr">

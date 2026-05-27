@@ -1966,13 +1966,16 @@ function renderWeekAheadGrid(recs, stats) {
       </tr></thead>
       <tbody>`;
 
+  // Expose locations list globally so onclick handlers can reference by index (avoids quote-escaping issues)
+  window.__weekAheadSites = locations;
+
   locations.forEach((loc, idx) => {
     html += `<tr style="background:${idx%2===0?'#FAFAFA':'#FFFFFF'};vertical-align:top">`;
     const cmList = getCMsForSite(loc);
     html += `<td style="padding:10px 14px;border-bottom:1px solid #F1F5F9;border-right:1px solid #F1F5F9">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px">
         <div style="font-size:12px;font-weight:700;color:#1E293B">${escapeHtml(loc)}</div>
-        <button onclick="openCMEditor(${JSON.stringify(loc)})" title="Edit CMs" style="background:none;border:none;cursor:pointer;color:#CBD5E1;padding:0;flex-shrink:0;line-height:1;font-size:13px" onmouseover="this.style.color='#6366F1'" onmouseout="this.style.color='#CBD5E1'">✎</button>
+        <button onclick="openCMEditor(window.__weekAheadSites[${idx}])" title="Edit CMs" style="background:none;border:none;cursor:pointer;color:#CBD5E1;padding:0;flex-shrink:0;line-height:1;font-size:13px" onmouseover="this.style.color='#6366F1'" onmouseout="this.style.color='#CBD5E1'">✎</button>
       </div>
       ${cmList.length ? `<div style="font-size:10px;color:#94A3B8;margin-top:2px">${cmList.map(escapeHtml).join(', ')}</div>` : ''}
     </td>`;
@@ -2317,6 +2320,211 @@ function exportWeekAheadPDF() {
     <div class="li"><span class="dot" style="background:#F59E0B"></span>CM on PTO</div>
     <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Workspace reservations (reserved/total)</div>
   </div>
+
+  <!-- Footer (page 1) -->
+  <div class="footer">
+    <span>Generated ${escapeHtml(generatedAt)} &nbsp;·&nbsp; PulsePoint Community Manager Operations</span>
+    <span>Capacity model: ${MODEL.meetingEqPerDay} mtg-eq / CM / day &nbsp;·&nbsp; Baseline floor: ${MODEL.baselineLoad}%</span>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE 2 — VIPs & Travelers
+  ════════════════════════════════════════════════════════════════ -->
+  ${(function() {
+    // Collect all traveler + VIP records within the week window
+    const daysSet = new Set(days);
+    // VIPs: records with a vip field (meetings/events with VIP attendees)
+    // Travelers: _type === 'traveler'
+    const vipTravRecs = allRecs.filter(r =>
+      daysSet.has(r.date) &&
+      r._type !== 'space' &&
+      (r._type === 'traveler' || hasVip(r))
+    );
+
+    if (!vipTravRecs.length) return '';
+
+    // Group: { loc: { date: rec[] } }
+    const byLocDay2 = {};
+    vipTravRecs.forEach(r => {
+      const loc = r._canonicalSite || r.site; if (!loc) return;
+      (byLocDay2[loc] = byLocDay2[loc] || {});
+      (byLocDay2[loc][r.date] = byLocDay2[loc][r.date] || []).push(r);
+    });
+
+    let rows = '';
+    locations.forEach((loc, li) => {
+      const dayMap = byLocDay2[loc]; if (!dayMap) return;
+      const cmList2 = getCMsForSite(loc);
+      // Sort days
+      const sortedDays = Object.keys(dayMap).filter(d => daysSet.has(d)).sort();
+      if (!sortedDays.length) return;
+      const rowBg2 = li % 2 === 0 ? '#fafafa' : '#fff';
+      rows += \`<tr style="background:\${rowBg2}">
+        <td style="padding:8px 12px;border-right:2px solid #e2e8f0;vertical-align:top;min-width:130px;background:\${rowBg2}">
+          <div style="font-size:11px;font-weight:800;color:#1e293b">\${escapeHtml(loc)}</div>
+          \${cmList2.length ? \`<div style="font-size:8px;color:#94a3b8;margin-top:1px;line-height:1.4">\${cmList2.map(cm => \`<span style="white-space:nowrap;display:block">\${escapeHtml(cm)}</span>\`).join('')}</div>\` : ''}
+        </td>
+        \${dayMeta.filter(h => daysSet.has(h.d)).map(h => {
+          const recs2 = dayMap[h.d] || [];
+          if (!recs2.length) return \`<td style="padding:6px;border-right:1px solid #f1f5f9;background:\${rowBg2}"><span style="color:#e2e8f0;font-size:14px;display:block;text-align:center">·</span></td>\`;
+          const travelers = recs2.filter(r => r._type === 'traveler');
+          const vipMtgs   = recs2.filter(r => r._type !== 'traveler' && hasVip(r));
+          let cell = '';
+          if (travelers.length) {
+            cell += \`<div style="margin-bottom:\${vipMtgs.length ? 5 : 0}px">
+              <div style="font-size:7.5px;font-weight:700;color:#10B981;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Travelers (\${travelers.length})</div>
+              \${travelers.map(r => \`<div style="display:flex;gap:4px;align-items:flex-start;padding:2px 0;border-bottom:1px solid rgba(0,0,0,.04)">
+                <span style="width:5px;height:5px;border-radius:50%;background:#10B981;flex-shrink:0;margin-top:3px"></span>
+                <div>
+                  <div style="font-size:8.5px;font-weight:600;color:#1e293b">\${escapeHtml(r.event_name || '—')}</div>
+                  \${hasVip(r) ? \`<div style="font-size:7.5px;color:#7C3AED;font-weight:600">★ \${escapeHtml(String(r.vip))}</div>\` : ''}
+                </div>
+              </div>\`).join('')}
+            </div>\`;
+          }
+          if (vipMtgs.length) {
+            cell += \`<div>
+              <div style="font-size:7.5px;font-weight:700;color:#7C3AED;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">VIP Meetings/Events (\${vipMtgs.length})</div>
+              \${vipMtgs.map(r => \`<div style="display:flex;gap:4px;align-items:flex-start;padding:2px 0;border-bottom:1px solid rgba(0,0,0,.04)">
+                <span style="width:5px;height:5px;border-radius:50%;background:\${r._type==='event'?'#EC4899':'#3B82F6'};flex-shrink:0;margin-top:3px"></span>
+                <div>
+                  <div style="font-size:8.5px;font-weight:600;color:#1e293b">\${escapeHtml(r.event_name || '—')}</div>
+                  <div style="font-size:7.5px;color:#7C3AED;font-weight:600">★ \${escapeHtml(String(r.vip))}</div>
+                  \${r.attendees > 0 ? \`<div style="font-size:7px;color:#64748b">\${r.attendees} attendees</div>\` : ''}
+                </div>
+              </div>\`).join('')}
+            </div>\`;
+          }
+          return \`<td style="padding:6px 8px;border-right:1px solid #f1f5f9;vertical-align:top;background:\${rowBg2}">\${cell}</td>\`;
+        }).join('')}
+      </tr>\`;
+    });
+
+    if (!rows) return '';
+
+    const colHeaders = dayMeta.filter(h => daysSet.has(h.d)).map(h =>
+      \`<th style="text-align:left;padding:8px 8px 10px;border-bottom:3px solid \${h.isToday?'#4338CA':'#e2e8f0'};background:\${h.isToday?'#EEF2FF':'#f8fafc'};font-size:11px;font-weight:700;color:\${h.isToday?'#4338CA':'#374151'}">\${h.weekday} <span style="font-weight:400;color:#94a3b8">\${h.mmdd}</span></th>\`
+    ).join('');
+
+    return \`<div style="page-break-before:always;padding-top:16px">
+      <div class="hdr">
+        <div class="logo-wrap"><div><div class="logo">Pulse<em>Point</em></div><div class="logo-sub">Community Manager Operations</div></div></div>
+        <div class="hdr-right"><div class="hdr-title">VIPs & Travelers — Detail View</div><div class="hdr-date">\${escapeHtml(weekRange)}</div><div class="hdr-badge">Confidential</div></div>
+      </div>
+      <table>
+        <colgroup><col style="width:130px">\${days.map(()=>'<col>').join('')}</colgroup>
+        <thead>
+          <tr>
+            <th style="padding:8px 12px 10px;font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #e2e8f0;border-right:2px solid #e2e8f0">Location</th>
+            \${colHeaders}
+          </tr>
+        </thead>
+        <tbody>\${rows}</tbody>
+      </table>
+    </div>\`;
+  })()}
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE 3 — Meetings & Events
+  ════════════════════════════════════════════════════════════════ -->
+  ${(function() {
+    const daysSet = new Set(days);
+    const mtgEvtRecs = allRecs.filter(r =>
+      daysSet.has(r.date) && (r._type === 'meeting' || r._type === 'event')
+    );
+    if (!mtgEvtRecs.length) return '';
+
+    const byLocDay3 = {};
+    mtgEvtRecs.forEach(r => {
+      const loc = r._canonicalSite || r.site; if (!loc) return;
+      (byLocDay3[loc] = byLocDay3[loc] || {});
+      (byLocDay3[loc][r.date] = byLocDay3[loc][r.date] || []).push(r);
+    });
+
+    let rows = '';
+    locations.forEach((loc, li) => {
+      const dayMap = byLocDay3[loc]; if (!dayMap) return;
+      const cmList3 = getCMsForSite(loc);
+      const rowBg3 = li % 2 === 0 ? '#fafafa' : '#fff';
+      rows += \`<tr style="background:\${rowBg3}">
+        <td style="padding:8px 12px;border-right:2px solid #e2e8f0;vertical-align:top;min-width:130px;background:\${rowBg3}">
+          <div style="font-size:11px;font-weight:800;color:#1e293b">\${escapeHtml(loc)}</div>
+          \${cmList3.length ? \`<div style="font-size:8px;color:#94a3b8;margin-top:1px;line-height:1.4">\${cmList3.map(cm => \`<span style="white-space:nowrap;display:block">\${escapeHtml(cm)}</span>\`).join('')}</div>\` : ''}
+        </td>
+        \${dayMeta.filter(h => daysSet.has(h.d)).map(h => {
+          const recs3 = dayMap[h.d] || [];
+          if (!recs3.length) return \`<td style="padding:6px;border-right:1px solid #f1f5f9;background:\${rowBg3}"><span style="color:#e2e8f0;font-size:14px;display:block;text-align:center">·</span></td>\`;
+          const meetings = recs3.filter(r => r._type === 'meeting');
+          const events   = recs3.filter(r => r._type === 'event');
+          let cell = '';
+          if (meetings.length) {
+            cell += \`<div style="margin-bottom:\${events.length?5:0}px">
+              <div style="font-size:7.5px;font-weight:700;color:#3B82F6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Meetings (\${meetings.length})</div>
+              \${meetings.map(r => {
+                const meta = [];
+                if (r.attendees > 0) meta.push(\`\${r.attendees} ppl\`);
+                if (r.room) meta.push(escapeHtml(r.room));
+                if (r.time) meta.push(escapeHtml(r.time));
+                if (hasVip(r)) meta.push(\`★ \${escapeHtml(String(r.vip)).slice(0,30)}\`);
+                return \`<div style="display:flex;gap:4px;align-items:flex-start;padding:2px 0;border-bottom:1px solid rgba(0,0,0,.04)">
+                  <span style="width:5px;height:5px;border-radius:50%;background:#3B82F6;flex-shrink:0;margin-top:3px"></span>
+                  <div>
+                    <div style="font-size:8.5px;font-weight:600;color:#1e293b">\${escapeHtml(r.event_name || '—')}</div>
+                    \${meta.length ? \`<div style="font-size:7px;color:#64748b">\${meta.join(' · ')}</div>\` : ''}
+                    \${r.status ? \`<div style="font-size:7px;color:#94a3b8">Status: \${escapeHtml(r.status)}</div>\` : ''}
+                  </div>
+                </div>\`;
+              }).join('')}
+            </div>\`;
+          }
+          if (events.length) {
+            cell += \`<div>
+              <div style="font-size:7.5px;font-weight:700;color:#EC4899;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Events (\${events.length})</div>
+              \${events.map(r => {
+                const meta2 = [];
+                if (r.attendees > 0) meta2.push(\`\${r.attendees} ppl\`);
+                if (r.room) meta2.push(escapeHtml(r.room));
+                if (r.budget) meta2.push(\`$\${Number(String(r.budget).replace(/[^0-9.]/g,'')).toLocaleString()}\`);
+                if (hasVip(r)) meta2.push(\`★ \${escapeHtml(String(r.vip)).slice(0,30)}\`);
+                return \`<div style="display:flex;gap:4px;align-items:flex-start;padding:2px 0;border-bottom:1px solid rgba(0,0,0,.04)">
+                  <span style="width:5px;height:5px;border-radius:50%;background:#EC4899;flex-shrink:0;margin-top:3px"></span>
+                  <div>
+                    <div style="font-size:8.5px;font-weight:600;color:#1e293b">\${escapeHtml(r.event_name || '—')}</div>
+                    \${meta2.length ? \`<div style="font-size:7px;color:#64748b">\${meta2.join(' · ')}</div>\` : ''}
+                    \${r.status ? \`<div style="font-size:7px;color:#94a3b8">Status: \${escapeHtml(r.status)}</div>\` : ''}
+                  </div>
+                </div>\`;
+              }).join('')}
+            </div>\`;
+          }
+          return \`<td style="padding:6px 8px;border-right:1px solid #f1f5f9;vertical-align:top;background:\${rowBg3}">\${cell}</td>\`;
+        }).join('')}
+      </tr>\`;
+    });
+
+    if (!rows) return '';
+
+    const colHeaders2 = dayMeta.filter(h => daysSet.has(h.d)).map(h =>
+      \`<th style="text-align:left;padding:8px 8px 10px;border-bottom:3px solid \${h.isToday?'#4338CA':'#e2e8f0'};background:\${h.isToday?'#EEF2FF':'#f8fafc'};font-size:11px;font-weight:700;color:\${h.isToday?'#4338CA':'#374151'}">\${h.weekday} <span style="font-weight:400;color:#94a3b8">\${h.mmdd}</span></th>\`
+    ).join('');
+
+    return \`<div style="page-break-before:always;padding-top:16px">
+      <div class="hdr">
+        <div class="logo-wrap"><div><div class="logo">Pulse<em>Point</em></div><div class="logo-sub">Community Manager Operations</div></div></div>
+        <div class="hdr-right"><div class="hdr-title">Meetings & Events — Detail View</div><div class="hdr-date">\${escapeHtml(weekRange)}</div><div class="hdr-badge">Confidential</div></div>
+      </div>
+      <table>
+        <colgroup><col style="width:130px">\${days.map(()=>'<col>').join('')}</colgroup>
+        <thead>
+          <tr>
+            <th style="padding:8px 12px 10px;font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #e2e8f0;border-right:2px solid #e2e8f0">Location</th>
+            \${colHeaders2}
+          </tr>
+        </thead>
+        <tbody>\${rows}</tbody>
+      </table>
+    </div>\`;
+  })()}
 
   <!-- Footer -->
   <div class="footer">

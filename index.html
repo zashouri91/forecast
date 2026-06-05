@@ -2298,6 +2298,7 @@ function renderWeekAheadGrid(recs, stats) {
   recs.forEach(r => {
     const loc = r._canonicalSite || r.site;
     if (!loc || !r.date) return;
+    if (r._type !== 'space' && isCanceled(r)) return; // skip canceled meetings/events
     if (!byLocDay[loc]) byLocDay[loc] = {};
     if (!byLocDay[loc][r.date]) byLocDay[loc][r.date] = [];
     byLocDay[loc][r.date].push(r);
@@ -2649,7 +2650,7 @@ function exportWeekAheadPDF() {
       </td>`;
     });
 
-    tableRows += `<tr>${cells}</tr>`;
+    tableRows += `<tr style="break-inside:avoid;page-break-inside:avoid">${cells}</tr>`;
   });
 
   const generatedAt = new Date().toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'});
@@ -2704,8 +2705,8 @@ function exportWeekAheadPDF() {
       const dayLabel = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
       const isToday = d === todayStr();
 
-      // Day header row
-      tbody += `<tr>
+      // Day header row — break-after:avoid keeps it attached to content below
+      tbody += `<tr data-hdr="day" style="break-after:avoid;page-break-after:avoid">
         <td colspan="99" style="padding:8px 14px;background:${isToday ? '#4338CA' : '#1e293b'};color:#fff;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;border-top:3px solid ${isToday ? '#6366F1' : '#334155'}">
           ${isToday ? '▶ TODAY — ' : ''}${escapeHtml(dayLabel)}
         </td>
@@ -2717,8 +2718,8 @@ function exportWeekAheadPDF() {
         const cms  = getCMsForSite(loc);
         const cmStr = cms.length ? cms.join(', ') : '';
 
-        // Site sub-header
-        tbody += `<tr>
+        // Site sub-header — break-after:avoid keeps it attached to its records
+        tbody += `<tr data-hdr="site" style="break-after:avoid;page-break-after:avoid">
           <td colspan="99" style="padding:5px 14px 5px 20px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;border-top:1px solid #e2e8f0">
             <span style="font-size:10px;font-weight:800;color:#1e293b;letter-spacing:-.01em">${escapeHtml(loc)}</span>
             ${cmStr ? `<span style="font-size:8px;color:#94a3b8;margin-left:10px">CMs: ${escapeHtml(cmStr)}</span>` : ''}
@@ -2790,7 +2791,7 @@ function exportWeekAheadPDF() {
     const colHeaders = th => [th('Type'), th('Name / Traveler'), th('VIP Attendee'), th('# Ppl'), th('Room'), th('Catering'), th('Budget'), th('Status / Notes')].join('');
 
     return buildGroupedTable(
-      r => r._type !== 'space',
+      r => r._type !== 'space' && !isCanceled(r),
       rowRenderer, colHeaders,
       'Week Ahead — Activity Detail',
       'All travelers, events, and meetings for the week. Grouped by day then location. Sorted by type within each site.'
@@ -2846,6 +2847,14 @@ function exportWeekAheadPDF() {
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .landscape-prompt { display: none !important; }
+    /* Allow the table itself to break across pages */
+    table { break-inside: auto; page-break-inside: auto; }
+    /* Prevent individual location rows from being sliced mid-row */
+    tbody tr { break-inside: avoid; page-break-inside: avoid; }
+    /* Repeat column headers on each page */
+    thead { display: table-header-group; }
+    /* Keep day/site header rows attached to first data row below */
+    tr[data-hdr] { break-after: avoid; page-break-after: avoid; }
   }
 </style>
 </head>
@@ -2887,16 +2896,14 @@ function exportWeekAheadPDF() {
         <th colspan="${days.length + 1}" style="padding:5px 10px 6px;background:#f8fafc;border-bottom:2px solid #e2e8f0">
           <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
             <span style="font-size:7.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em">Legend</span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#FEE2E2;border:1px solid #F87171;display:inline-block"></span><b style="color:#991B1B">HIGH</b>&nbsp;at/over capacity</span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#FEF3C7;border:1px solid #FCD34D;display:inline-block"></span><b style="color:#92400E">BUSY</b>&nbsp;stretched</span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#F0FDF4;border:1px solid #86EFAC;display:inline-block"></span><b style="color:#065F46">OK</b>&nbsp;room to spare</span>
+            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#FEF2F2;border-left:3px solid #EF4444;display:inline-block"></span><b style="color:#DC2626">Red</b>&nbsp;— 2+ CMs out or supervisor + CM out</span>
+            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#FFFBEB;border-left:3px solid #F59E0B;display:inline-block"></span><b style="color:#92400E">Amber</b>&nbsp;— 1 CM out or supervisor out</span>
             <span style="width:1px;height:14px;background:#e2e8f0;display:inline-block"></span>
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#3B82F6;display:inline-block"></span>Meeting</span>
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#EC4899;display:inline-block"></span>Event</span>
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#10B981;display:inline-block"></span>Traveler</span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;display:inline-block"></span>CM on PTO</span>
             <span style="width:1px;height:14px;background:#e2e8f0;display:inline-block"></span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Workspace reservations (reserved/capacity)</span>
+            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Workspace reservations (reserved/total)</span>
           </div>
         </th>
       </tr>
@@ -2906,28 +2913,24 @@ function exportWeekAheadPDF() {
 
   <!-- Legend -->
   <div class="legend">
-    <span style="font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Legend</span>
-    <div class="li"><span class="sq" style="background:#FEE2E2;border:1px solid #F87171"></span> <b style="color:#991B1B">HIGH</b> — at/over capacity</div>
-    <div class="li"><span class="sq" style="background:#FEF3C7;border:1px solid #FCD34D"></span> <b style="color:#92400E">BUSY</b> — stretched</div>
-    <div class="li"><span class="sq" style="background:#F0FDF4;border:1px solid #86EFAC"></span> <b style="color:#065F46">OK</b> — room to spare</div>
+    <span style="font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Staff Flags</span>
+    <div class="li"><span class="sq" style="background:#FEF2F2;border-left:3px solid #EF4444"></span> <b style="color:#DC2626">Red</b> — 2+ CMs out, or supervisor + CM out</div>
+    <div class="li"><span class="sq" style="background:#FFFBEB;border-left:3px solid #F59E0B"></span> <b style="color:#92400E">Amber</b> — 1 CM out, or supervisor out</div>
     <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="dot" style="background:#3B82F6"></span>Meeting</div>
     <div class="li"><span class="dot" style="background:#EC4899"></span>Event</div>
     <div class="li"><span class="dot" style="background:#10B981"></span>Traveler</div>
-    <div class="li"><span class="dot" style="background:#F59E0B"></span>CM on PTO</div>
     <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Workspace reservations (reserved/total)</div>
   </div>
 
   <!-- Footer (page 1) -->
   <div class="footer">
     <span>Generated ${escapeHtml(generatedAt)} &nbsp;·&nbsp; PulsePoint Community Manager Operations</span>
-    <span>Capacity model: ${MODEL.meetingEqPerDay} mtg-eq / CM / day &nbsp;·&nbsp; Baseline floor: ${MODEL.baselineLoad}%</span>
   </div>
 
   ${detailPageHtml}
   <!-- Footer -->
   <div class="footer">
     <span>Generated ${escapeHtml(generatedAt)} &nbsp;·&nbsp; PulsePoint Community Manager Operations</span>
-    <span>Capacity model: ${MODEL.meetingEqPerDay} mtg-eq / CM / day &nbsp;·&nbsp; Baseline floor: ${MODEL.baselineLoad}%</span>
   </div>
 
 <script>
@@ -3206,7 +3209,11 @@ function fmtMoney(n) {
   if (n >= 1000) return `$${(n/1000).toFixed(n>=100000?0:1)}K`;
   return `$${Math.round(n).toLocaleString()}`;
 }
-function hasVip(r) { return !!(r.vip && String(r.vip).trim() && !/^(no|n|false|0)$/i.test(String(r.vip).trim())); }
+function hasVip(r) { const v = String(r.vip || '').trim(); return !!(v && !/^(no|n|false|0|n\/a|na|none|tbd|cm|-)$/i.test(v) && v !== '—'); }
+function isCanceled(r) {
+  const s = String(r.status || '').toLowerCase();
+  return s.includes('cancel') || s.includes('postpone') || s.includes('declined');
+}
 
 function renderWorkspace(recs) {
   const space = recs.filter(r => r._type === 'space');

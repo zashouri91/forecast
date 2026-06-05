@@ -2313,16 +2313,19 @@ function renderWeekAheadGrid(recs, stats) {
   // Helper to render space type breakdown as compact text lines
   function spaceBreakdownHtml(typeMap, refSite, small) {
     if (!typeMap || !Object.keys(typeMap).length) return '';
-    const CAP_KEY = { 'Workstation':'workstations','Private Office':'privateOffices','Staff VP Office':'privateOffices','VP Office':'privateOffices','Focus Room':'meetingRooms','Meeting Room':'meetingRooms','Capsule':'capsules' };
+    const CAP_KEY = { 'Workstation':'workstations','Private Office':'privateOffices','Office':'privateOffices','Staff VP Office':'privateOffices','VP Office':'privateOffices','Focus Room':'meetingRooms','Meeting Room':'meetingRooms','Capsule':'capsules' };
     const fs = small ? '8px' : '9px';
     return Object.entries(typeMap).map(([t, n]) => {
       const capKey = CAP_KEY[t];
       const total = refSite?.capacity?.[capKey];
-      const pct = total ? ` (${Math.round(n/total*100)}%)` : '';
-      const label = total ? `${t}: ${n}/${total}${pct}` : `${t}: ${n}`;
+      const pct   = total ? Math.round(n / total * 100) : null;
+      // >100% = space booked across multiple time slots that day
+      const over  = pct !== null && pct > 100;
+      const pctStr = pct !== null ? ` (${pct}%${over ? ' ↑' : ''})` : '';
+      const label = total ? `${t}: ${n}/${total}${pctStr}` : `${t}: ${n} bookings`;
       return `<div style="display:flex;align-items:center;gap:4px;padding:1px 0">
-        <span style="width:6px;height:6px;border-radius:2px;background:#94A3B8;flex-shrink:0"></span>
-        <span style="font-size:${fs};color:#94A3B8;font-weight:500">${escapeHtml(label)}</span>
+        <span style="width:6px;height:6px;border-radius:2px;background:${over ? '#F59E0B' : '#94A3B8'};flex-shrink:0"></span>
+        <span style="font-size:${fs};color:${over ? '#92400E' : '#94A3B8'};font-weight:${over ? '600' : '500'}">${escapeHtml(label)}</span>
       </div>`;
     }).join('');
   }
@@ -2473,6 +2476,7 @@ function renderWeekAheadGrid(recs, stats) {
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#EC4899;display:inline-block"></span><span style="font-size:10px;color:#64748B">Event</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block"></span><span style="font-size:10px;color:#64748B">Traveler</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:#92400E;font-weight:700">★</span><span style="font-size:10px;color:#64748B">Supervisor</span></div>
+      <div style="display:flex;align-items:center;gap:4px;border-left:1px solid #E2E8F0;padding-left:12px"><span style="font-size:10px;color:#94A3B8">Space: bookings/capacity — <span style="color:#92400E;font-weight:600">↑ over 100%</span> = booked multiple time slots that day</span></div>
     </div>
   </div>`;
 
@@ -2494,6 +2498,7 @@ function exportWeekAheadPDF() {
   const CAP_KEY = {
     'Workstation':     'workstations',
     'Private Office':  'privateOffices',
+    'Office':          'privateOffices',
     'Staff VP Office': 'privateOffices',
     'VP Office':       'privateOffices',
     'Focus Room':      'meetingRooms',
@@ -2626,15 +2631,17 @@ function exportWeekAheadPDF() {
         <div style="font-size:7.5px;font-style:italic;color:#64748b;line-height:1.4">${escapeHtml(pdfNarrative)}</div>
       </div>`;
 
-      // Space type breakdown
+      // Space type breakdown (same logic as spaceBreakdownHtml but inline for PDF cells)
       if (spaceTotal) {
         let spaceLines = '';
         Object.entries(spaceTypes).forEach(([t, n]) => {
           const capKey = CAP_KEY[t];
           const total  = refSite?.capacity?.[capKey];
-          const pct    = total ? ` (${Math.round(n / total * 100)}%)` : '';
-          const label  = total ? `${t}: ${n}/${total}${pct}` : `${t}: ${n}`;
-          spaceLines += `<div style="font-size:8px;color:#94a3b8;line-height:1.5">${escapeHtml(label)}</div>`;
+          const pct    = total ? Math.round(n / total * 100) : null;
+          const over   = pct !== null && pct > 100;
+          const pctStr = pct !== null ? ` (${pct}%${over ? ' ↑' : ''})` : '';
+          const label  = total ? `${t}: ${n}/${total}${pctStr}` : `${t}: ${n} bookings`;
+          spaceLines += `<div style="font-size:8px;color:${over ? '#92400E' : '#94a3b8'};font-weight:${over ? '600' : '400'};line-height:1.5">${escapeHtml(label)}</div>`;
         });
         items += `<div style="margin-top:4px;padding-top:4px;border-top:1px dashed #e2e8f0">${spaceLines}</div>`;
       }
@@ -2903,7 +2910,7 @@ function exportWeekAheadPDF() {
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#EC4899;display:inline-block"></span>Event</span>
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#10B981;display:inline-block"></span>Traveler</span>
             <span style="width:1px;height:14px;background:#e2e8f0;display:inline-block"></span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Workspace reservations (reserved/total)</span>
+            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Space: bookings/capacity &nbsp;·&nbsp; <b style="color:#92400E">↑ &gt;100%</b> = space booked across multiple time slots</span>
           </div>
         </th>
       </tr>
@@ -2919,7 +2926,8 @@ function exportWeekAheadPDF() {
     <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="dot" style="background:#3B82F6"></span>Meeting</div>
     <div class="li"><span class="dot" style="background:#EC4899"></span>Event</div>
     <div class="li"><span class="dot" style="background:#10B981"></span>Traveler</div>
-    <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Workspace reservations (reserved/total)</div>
+    <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Space: bookings / capacity</div>
+    <div class="li"><span class="sq" style="background:#FFFBEB;border-left:2px solid #F59E0B"></span><b style="color:#92400E">↑ &gt;100%</b> — space booked multiple time slots that day</div>
   </div>
 
   <!-- Footer (page 1) -->

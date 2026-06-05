@@ -922,9 +922,9 @@ function extractMinutes(val) {
 }
 
 // Constants for the business-hours occupancy window
-const BIZ_S = 450;    // 7:30 am in minutes
+const BIZ_S = 480;    // 8:00 am in minutes
 const BIZ_E = 1020;   // 5:00 pm in minutes
-const BIZ_TOTAL = BIZ_E - BIZ_S; // 570 min
+const BIZ_TOTAL = BIZ_E - BIZ_S; // 540 min (8am–5pm)
 
 // Add one space reservation record into the spaceByLocDay structure.
 // entry: { txn, intervals: {amenityId:[[s,e]]}, afterHoursTxn }
@@ -2394,7 +2394,7 @@ function renderWeekAheadGrid(recs, stats) {
         if (cap > 0 && Object.keys(ivs).length > 0) {
           const totalOcc = Object.values(ivs).reduce((sum,iv)=>sum+unionMins(iv),0);
           const pct = Math.round(totalOcc / (cap * BIZ_TOTAL) * 100);
-          label = `${t}: ${pct}% occ (7:30a–5p)`;
+          label = `${t}: ${pct}% of hrs (8a–5p)`;  // time-weighted, not reservation count
           if (pct>=80){color='#DC2626';fw='600';}
           else if (pct>=50){color='#92400E';fw='600';}
         } else if (cap > 0) {
@@ -2412,7 +2412,7 @@ function renderWeekAheadGrid(recs, stats) {
         hasAH = true;
         ahHtml += `<div style="display:flex;align-items:center;gap:4px;padding:1px 0">
           <span style="width:6px;height:6px;border-radius:2px;background:#C4B5FD;flex-shrink:0"></span>
-          <span style="font-size:${fsAH};color:#7C3AED">${escapeHtml(t)}: ${ahTxn}</span>
+          <span style="font-size:${fsAH};color:#7C3AED">${escapeHtml(t)}: ${ahTxn} ${ahTxn===1?'reservation':'reservations'}</span>
         </div>`;
       }
     });
@@ -2569,7 +2569,7 @@ function renderWeekAheadGrid(recs, stats) {
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#EC4899;display:inline-block"></span><span style="font-size:10px;color:#64748B">Event</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block"></span><span style="font-size:10px;color:#64748B">Traveler</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:#92400E;font-weight:700">★</span><span style="font-size:10px;color:#64748B">Supervisor</span></div>
-      <div style="display:flex;align-items:center;gap:4px;border-left:1px solid #E2E8F0;padding-left:12px"><span style="font-size:10px;color:#94A3B8">Space: time-weighted occupancy % (7:30am–5pm) · <span style="color:#7C3AED;font-weight:600">■ After Hours</span> = bookings outside that window</span></div>
+      <div style="display:flex;align-items:center;gap:4px;border-left:1px solid #E2E8F0;padding-left:12px"><span style="font-size:10px;color:#94A3B8">Space: time-weighted occupancy % (8am–5pm) · <span style="color:#7C3AED;font-weight:600">■ After Hours</span> = bookings outside that window</span></div>
     </div>
   </div>`;
 
@@ -2737,7 +2737,7 @@ function exportWeekAheadPDF() {
             if (cap > 0 && Object.keys(ivs).length > 0) {
               const totalOcc = Object.values(ivs).reduce((sum,iv)=>sum+pdfUnionMins(iv),0);
               const pct = Math.round(totalOcc / (cap * BIZ_TOTAL) * 100);
-              label = `${t}: ${pct}% occ`;
+              label = `${t}: ${pct}% of hrs`;  // time-weighted
               if(pct>=80){color='#DC2626';fw='600';}else if(pct>=50){color='#92400E';fw='600';}
             } else if (cap > 0) {
               label = `${t}: ${bizTxn}/${cap}`;
@@ -2748,7 +2748,7 @@ function exportWeekAheadPDF() {
           }
           if (ahTxn > 0) {
             hasAH = true;
-            ahLines += `<div style="font-size:7.5px;color:#7C3AED;line-height:1.5">${escapeHtml(t)}: ${ahTxn}</div>`;
+            ahLines += `<div style="font-size:7.5px;color:#7C3AED;line-height:1.5">${escapeHtml(t)}: ${ahTxn} ${ahTxn===1?'reservation':'reservations'}</div>`;
           }
         });
         let spaceBlock = spaceLines;
@@ -3020,7 +3020,7 @@ function exportWeekAheadPDF() {
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#EC4899;display:inline-block"></span>Event</span>
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#10B981;display:inline-block"></span>Traveler</span>
             <span style="width:1px;height:14px;background:#e2e8f0;display:inline-block"></span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Space: time-weighted occ % (7:30a–5p) &nbsp;·&nbsp; <span style="color:#7C3AED;font-weight:600">■</span> After Hours = bookings outside window</span>
+            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Space: time-weighted occ % (8a–5p) &nbsp;·&nbsp; <span style="color:#7C3AED;font-weight:600">■</span> After Hours = # reservations outside 8am–5pm</span>
           </div>
         </th>
       </tr>
@@ -3036,8 +3036,8 @@ function exportWeekAheadPDF() {
     <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="dot" style="background:#3B82F6"></span>Meeting</div>
     <div class="li"><span class="dot" style="background:#EC4899"></span>Event</div>
     <div class="li"><span class="dot" style="background:#10B981"></span>Traveler</div>
-    <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Space: time-weighted occupancy % (7:30am–5pm)</div>
-    <div class="li"><span class="sq" style="background:#EDE9FE;border-left:2px solid #7C3AED"></span><span style="color:#7C3AED;font-weight:600">After Hours</span> — bookings outside 7:30am–5pm window</div>
+    <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Space: time-weighted occupancy % (8am–5pm)</div>
+    <div class="li"><span class="sq" style="background:#EDE9FE;border-left:2px solid #7C3AED"></span><span style="color:#7C3AED;font-weight:600">After Hours</span> — bookings outside 8am–5pm window</div>
   </div>
 
   <!-- Footer (page 1) -->

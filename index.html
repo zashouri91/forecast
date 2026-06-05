@@ -909,6 +909,53 @@ function renderSiteResolutionPanel(f, fi) {
 }
 
 function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Extract minutes-from-midnight from a raw date-time value (string or Date).
+// Used to preserve time-of-day for Space Report records before fmtDate() strips it.
+function extractMinutes(val) {
+  if (val == null || val === '') return null;
+  if (val instanceof Date) return val.getHours() * 60 + val.getMinutes();
+  const s = String(val).trim();
+  // "YYYY-MM-DD HH:MM..." or "YYYY-MM-DDTHH:MM..."
+  const m = s.match(/\d{4}-\d{2}-\d{2}[T ]?(\d{1,2}):(\d{2})/);
+  if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  return null;
+}
+
+// Constants for the business-hours occupancy window
+const BIZ_S = 450;    // 7:30 am in minutes
+const BIZ_E = 1020;   // 5:00 pm in minutes
+const BIZ_TOTAL = BIZ_E - BIZ_S; // 570 min
+
+// Add one space reservation record into the spaceByLocDay structure.
+// entry: { txn, intervals: {amenityId:[[s,e]]}, afterHoursTxn }
+function spaceEntryAdd(map, loc, date, atype, r) {
+  if (!map[loc])       map[loc] = {};
+  if (!map[loc][date]) map[loc][date] = {};
+  if (!map[loc][date][atype]) map[loc][date][atype] = { txn:0, intervals:{}, afterHoursTxn:0 };
+  const entry = map[loc][date][atype];
+  entry.txn++;
+
+  const sm = r._startMin ?? null;
+  const em = r._endMin   ?? (sm != null ? sm + 60 : null);  // default 1 hr if no end
+
+  if (sm != null && em != null) {
+    const bizS = Math.max(sm, BIZ_S);
+    const bizE = Math.min(em, BIZ_E);
+    if (bizE > bizS) {
+      // Overlaps business hours — store clipped interval per amenity for union later
+      const amid = r._amenityId || ('_txn' + entry.txn);
+      if (!entry.intervals[amid]) entry.intervals[amid] = [];
+      entry.intervals[amid].push([bizS, bizE]);
+    } else {
+      // Entirely outside business hours
+      entry.afterHoursTxn++;
+    }
+  }
+  // If time data unavailable, only increment txn (no interval data)
+}
+
+// Get the total transaction count from a spaceByLocDay type entry (handles legacy number or new object)
+function spaceEntryTxn(v) { return typeof v === 'object' ? v.txn : (v || 0); }
 
 function overrideSiteResolution(fileName, raw, canonicalSiteName) {
   const f = state.files.find(x => x.name === fileName); if (!f || !f._siteResolution) return;
@@ -1026,6 +1073,19 @@ function applyMappings() {
           state.filteredOutCount++;
           state.filteredOutBySource[name] = (state.filteredOutBySource[name]||0) + 1;
           return;
+        }
+      }
+      // For space records: capture start/end time-of-day and amenity ID
+      // (these are stripped by fmtDate; we extract them from the raw row values first)
+      if (rec._type === 'space') {
+        const rawStart = fi2idx.date     !== undefined ? row[fi2idx.date]     : null;
+        const rawEnd   = fi2idx.end_date !== undefined ? row[fi2idx.end_date] : null;
+        rec._startMin  = extractMinutes(rawStart);
+        rec._endMin    = rawEnd != null ? extractMinutes(rawEnd) : null;
+        // Find AMENITY_ID column for per-space interval deduplication
+        if (rec._amenityId == null) {
+          const aidIdx = columns.findIndex(c => c && /^amenity_id$/i.test(String(c).trim()));
+          if (aidIdx >= 0 && row[aidIdx] != null) rec._amenityId = String(row[aidIdx]).trim();
         }
       }
       state.records.push(rec);
@@ -2303,31 +2363,64 @@ function renderWeekAheadGrid(recs, stats) {
     if (!byLocDay[loc][r.date]) byLocDay[loc][r.date] = [];
     byLocDay[loc][r.date].push(r);
     if (r._type === 'space') {
-      if (!spaceByLocDay[loc]) spaceByLocDay[loc] = {};
-      if (!spaceByLocDay[loc][r.date]) spaceByLocDay[loc][r.date] = {};
       const atype = (r.event_type || 'Other').trim() || 'Other';
-      spaceByLocDay[loc][r.date][atype] = (spaceByLocDay[loc][r.date][atype] || 0) + 1;
+      spaceEntryAdd(spaceByLocDay, loc, r.date, atype, r);
     }
   });
 
-  // Helper to render space type breakdown as compact text lines
+  // Render space type breakdown: time-weighted biz-hours occupancy + after-hours section
   function spaceBreakdownHtml(typeMap, refSite, small) {
     if (!typeMap || !Object.keys(typeMap).length) return '';
     const CAP_KEY = { 'Workstation':'workstations','Private Office':'privateOffices','Office':'privateOffices','Staff VP Office':'privateOffices','VP Office':'privateOffices','Focus Room':'meetingRooms','Meeting Room':'meetingRooms','Capsule':'capsules' };
-    const fs = small ? '8px' : '9px';
-    return Object.entries(typeMap).map(([t, n]) => {
-      const capKey = CAP_KEY[t];
-      const total = refSite?.capacity?.[capKey];
-      const pct   = total ? Math.round(n / total * 100) : null;
-      // >100% = space booked across multiple time slots that day
-      const over  = pct !== null && pct > 100;
-      const pctStr = pct !== null ? ` (${pct}%${over ? ' ↑' : ''})` : '';
-      const label = total ? `${t}: ${n}/${total}${pctStr}` : `${t}: ${n} bookings`;
-      return `<div style="display:flex;align-items:center;gap:4px;padding:1px 0">
-        <span style="width:6px;height:6px;border-radius:2px;background:${over ? '#F59E0B' : '#94A3B8'};flex-shrink:0"></span>
-        <span style="font-size:${fs};color:${over ? '#92400E' : '#94A3B8'};font-weight:${over ? '600' : '500'}">${escapeHtml(label)}</span>
-      </div>`;
-    }).join('');
+    const fs = small ? '8px' : '9px'; const fsAH = small ? '7.5px' : '8.5px';
+
+    function unionMins(ivs) {
+      if (!ivs||!ivs.length) return 0;
+      const s=[...ivs].sort((a,b)=>a[0]-b[0]); let cs=s[0][0],ce=s[0][1],t=0;
+      for (let i=1;i<s.length;i++){if(s[i][0]<=ce)ce=Math.max(ce,s[i][1]);else{t+=ce-cs;cs=s[i][0];ce=s[i][1];}}
+      return t+(ce-cs);
+    }
+
+    let bizHtml='', ahHtml='', hasAH=false;
+    Object.entries(typeMap).forEach(([t, data]) => {
+      const cap   = refSite?.capacity?.[CAP_KEY[t]] || 0;
+      const txn   = spaceEntryTxn(data);
+      const ivs   = typeof data==='object' ? (data.intervals||{}) : {};
+      const ahTxn = typeof data==='object' ? (data.afterHoursTxn||0) : 0;
+      const bizTxn = txn - ahTxn;
+
+      if (bizTxn > 0 || Object.keys(ivs).length > 0) {
+        let label, color='#94A3B8', fw='500';
+        if (cap > 0 && Object.keys(ivs).length > 0) {
+          const totalOcc = Object.values(ivs).reduce((sum,iv)=>sum+unionMins(iv),0);
+          const pct = Math.round(totalOcc / (cap * BIZ_TOTAL) * 100);
+          label = `${t}: ${pct}% occ (7:30a–5p)`;
+          if (pct>=80){color='#DC2626';fw='600';}
+          else if (pct>=50){color='#92400E';fw='600';}
+        } else if (cap > 0) {
+          label = `${t}: ${bizTxn}/${cap}`;
+        } else {
+          label = `${t}: ${bizTxn} bookings`;
+        }
+        bizHtml += `<div style="display:flex;align-items:center;gap:4px;padding:1px 0">
+          <span style="width:6px;height:6px;border-radius:2px;background:${color};flex-shrink:0"></span>
+          <span style="font-size:${fs};color:${color};font-weight:${fw}">${escapeHtml(label)}</span>
+        </div>`;
+      }
+
+      if (ahTxn > 0) {
+        hasAH = true;
+        ahHtml += `<div style="display:flex;align-items:center;gap:4px;padding:1px 0">
+          <span style="width:6px;height:6px;border-radius:2px;background:#C4B5FD;flex-shrink:0"></span>
+          <span style="font-size:${fsAH};color:#7C3AED">${escapeHtml(t)}: ${ahTxn}</span>
+        </div>`;
+      }
+    });
+
+    if (!hasAH) return bizHtml;
+    return bizHtml + `<div style="margin-top:3px;padding-top:2px;border-top:1px dashed #E2E8F0">
+      <div style="font-size:7px;font-weight:700;color:#94A3B8;letter-spacing:.04em;text-transform:uppercase;margin-bottom:1px">After Hours</div>
+      ${ahHtml}</div>`;
   }
 
   // Coverage-based flags (not load math)
@@ -2403,7 +2496,7 @@ function renderWeekAheadGrid(recs, stats) {
       const dayRecs = (byLocDay[loc]?.[h.d] || []).filter(r => r._type !== 'space');
       const ptoOut = (row?.ptoOut) || getPTO(loc, h.d);
       const spaceTypes = spaceByLocDay[loc]?.[h.d] || {};
-      const spaceCount = Object.values(spaceTypes).reduce((a, b) => a + b, 0);
+      const spaceCount = Object.values(spaceTypes).reduce((a, b) => a + spaceEntryTxn(b), 0);
       const refSite = REF()?.bySiteName?.[loc.toLowerCase()];
       const tdBase = `padding:0;border-bottom:1px solid #F1F5F9;border-right:1px solid #F1F5F9;${h.isToday ? 'background:#F9F8FF;' : ''}`;
 
@@ -2476,7 +2569,7 @@ function renderWeekAheadGrid(recs, stats) {
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#EC4899;display:inline-block"></span><span style="font-size:10px;color:#64748B">Event</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block"></span><span style="font-size:10px;color:#64748B">Traveler</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:#92400E;font-weight:700">★</span><span style="font-size:10px;color:#64748B">Supervisor</span></div>
-      <div style="display:flex;align-items:center;gap:4px;border-left:1px solid #E2E8F0;padding-left:12px"><span style="font-size:10px;color:#94A3B8">Space: bookings/capacity — <span style="color:#92400E;font-weight:600">↑ over 100%</span> = booked multiple time slots that day</span></div>
+      <div style="display:flex;align-items:center;gap:4px;border-left:1px solid #E2E8F0;padding-left:12px"><span style="font-size:10px;color:#94A3B8">Space: time-weighted occupancy % (7:30am–5pm) · <span style="color:#7C3AED;font-weight:600">■ After Hours</span> = bookings outside that window</span></div>
     </div>
   </div>`;
 
@@ -2526,10 +2619,8 @@ function exportWeekAheadPDF() {
     if (!byLocDay[loc][r.date]) byLocDay[loc][r.date] = [];
     byLocDay[loc][r.date].push(r);
     if (r._type === 'space') {
-      if (!spaceByLocDay[loc]) spaceByLocDay[loc] = {};
-      if (!spaceByLocDay[loc][r.date]) spaceByLocDay[loc][r.date] = {};
       const atype = (r.event_type || 'Other').trim() || 'Other';
-      spaceByLocDay[loc][r.date][atype] = (spaceByLocDay[loc][r.date][atype] || 0) + 1;
+      spaceEntryAdd(spaceByLocDay, loc, r.date, atype, r);
     }
   });
 
@@ -2573,7 +2664,7 @@ function exportWeekAheadPDF() {
       const dayRecs = (byLocDay[loc]?.[h.d] || []).filter(r => r._type !== 'space');
       const ptoOut  = row?.ptoOut || getPTO(loc, h.d);
       const spaceTypes = spaceByLocDay[loc]?.[h.d] || {};
-      const spaceTotal = Object.values(spaceTypes).reduce((a, b) => a + b, 0);
+      const spaceTotal = Object.values(spaceTypes).reduce((a, b) => a + spaceEntryTxn(b), 0);
       const tdStyle = `padding:0;border-right:1px solid #e2e8f0;vertical-align:top;background:${rowBg}`;
 
       if (!dayRecs.length && !ptoOut && !spaceTotal) {
@@ -2631,19 +2722,38 @@ function exportWeekAheadPDF() {
         <div style="font-size:7.5px;font-style:italic;color:#64748b;line-height:1.4">${escapeHtml(pdfNarrative)}</div>
       </div>`;
 
-      // Space type breakdown (same logic as spaceBreakdownHtml but inline for PDF cells)
+      // Space type breakdown — time-weighted occupancy + after hours (mirrors spaceBreakdownHtml)
       if (spaceTotal) {
-        let spaceLines = '';
-        Object.entries(spaceTypes).forEach(([t, n]) => {
-          const capKey = CAP_KEY[t];
-          const total  = refSite?.capacity?.[capKey];
-          const pct    = total ? Math.round(n / total * 100) : null;
-          const over   = pct !== null && pct > 100;
-          const pctStr = pct !== null ? ` (${pct}%${over ? ' ↑' : ''})` : '';
-          const label  = total ? `${t}: ${n}/${total}${pctStr}` : `${t}: ${n} bookings`;
-          spaceLines += `<div style="font-size:8px;color:${over ? '#92400E' : '#94a3b8'};font-weight:${over ? '600' : '400'};line-height:1.5">${escapeHtml(label)}</div>`;
+        function pdfUnionMins(ivs){if(!ivs||!ivs.length)return 0;const s=[...ivs].sort((a,b)=>a[0]-b[0]);let cs=s[0][0],ce=s[0][1],t=0;for(let i=1;i<s.length;i++){if(s[i][0]<=ce)ce=Math.max(ce,s[i][1]);else{t+=ce-cs;cs=s[i][0];ce=s[i][1];}}return t+(ce-cs);}
+        let spaceLines='', ahLines='', hasAH=false;
+        Object.entries(spaceTypes).forEach(([t, data]) => {
+          const cap   = refSite?.capacity?.[CAP_KEY[t]] || 0;
+          const txn   = spaceEntryTxn(data);
+          const ivs   = typeof data==='object' ? (data.intervals||{}) : {};
+          const ahTxn = typeof data==='object' ? (data.afterHoursTxn||0) : 0;
+          const bizTxn = txn - ahTxn;
+          if (bizTxn > 0 || Object.keys(ivs).length > 0) {
+            let label, color='#94a3b8', fw='400';
+            if (cap > 0 && Object.keys(ivs).length > 0) {
+              const totalOcc = Object.values(ivs).reduce((sum,iv)=>sum+pdfUnionMins(iv),0);
+              const pct = Math.round(totalOcc / (cap * BIZ_TOTAL) * 100);
+              label = `${t}: ${pct}% occ`;
+              if(pct>=80){color='#DC2626';fw='600';}else if(pct>=50){color='#92400E';fw='600';}
+            } else if (cap > 0) {
+              label = `${t}: ${bizTxn}/${cap}`;
+            } else {
+              label = `${t}: ${bizTxn} bookings`;
+            }
+            spaceLines += `<div style="font-size:8px;color:${color};font-weight:${fw};line-height:1.5">${escapeHtml(label)}</div>`;
+          }
+          if (ahTxn > 0) {
+            hasAH = true;
+            ahLines += `<div style="font-size:7.5px;color:#7C3AED;line-height:1.5">${escapeHtml(t)}: ${ahTxn}</div>`;
+          }
         });
-        items += `<div style="margin-top:4px;padding-top:4px;border-top:1px dashed #e2e8f0">${spaceLines}</div>`;
+        let spaceBlock = spaceLines;
+        if (hasAH) spaceBlock += `<div style="margin-top:2px;border-top:1px dashed #e2e8f0;padding-top:2px"><div style="font-size:6.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">After Hours</div>${ahLines}</div>`;
+        items += `<div style="margin-top:4px;padding-top:4px;border-top:1px dashed #e2e8f0">${spaceBlock}</div>`;
       }
 
       cells += `<td style="${tdStyle}">
@@ -2910,7 +3020,7 @@ function exportWeekAheadPDF() {
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#EC4899;display:inline-block"></span>Event</span>
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#10B981;display:inline-block"></span>Traveler</span>
             <span style="width:1px;height:14px;background:#e2e8f0;display:inline-block"></span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Space: bookings/capacity &nbsp;·&nbsp; <b style="color:#92400E">↑ &gt;100%</b> = space booked across multiple time slots</span>
+            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Space: time-weighted occ % (7:30a–5p) &nbsp;·&nbsp; <span style="color:#7C3AED;font-weight:600">■</span> After Hours = bookings outside window</span>
           </div>
         </th>
       </tr>
@@ -2926,8 +3036,8 @@ function exportWeekAheadPDF() {
     <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="dot" style="background:#3B82F6"></span>Meeting</div>
     <div class="li"><span class="dot" style="background:#EC4899"></span>Event</div>
     <div class="li"><span class="dot" style="background:#10B981"></span>Traveler</div>
-    <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Space: bookings / capacity</div>
-    <div class="li"><span class="sq" style="background:#FFFBEB;border-left:2px solid #F59E0B"></span><b style="color:#92400E">↑ &gt;100%</b> — space booked multiple time slots that day</div>
+    <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Space: time-weighted occupancy % (7:30am–5pm)</div>
+    <div class="li"><span class="sq" style="background:#EDE9FE;border-left:2px solid #7C3AED"></span><span style="color:#7C3AED;font-weight:600">After Hours</span> — bookings outside 7:30am–5pm window</div>
   </div>
 
   <!-- Footer (page 1) -->

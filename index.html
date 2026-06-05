@@ -926,6 +926,31 @@ const BIZ_S = 480;    // 8:00 am in minutes
 const BIZ_E = 1020;   // 5:00 pm in minutes
 const BIZ_TOTAL = BIZ_E - BIZ_S; // 540 min (8am–5pm)
 
+// Build a map of unique AMENITY_IDs per site per space type from all uploaded space records.
+// This gives us the actual reservable inventory — more accurate than the baked-in
+// reference.xlsx capacity, which includes permanently-assigned (non-reservable) spaces.
+// Returns: { 'Atlanta': { 'Capsule': 18, 'Workstation': 303, ... }, ... }
+function buildSpaceInventory(records) {
+  const inv = {};  // site → type → Set of amenityIds
+  records.forEach(r => {
+    if (r._type !== 'space') return;
+    const site  = r._canonicalSite || r.site;
+    const atype = (r.event_type || '').trim();
+    const amid  = r._amenityId;
+    if (!site || !atype || !amid) return;
+    if (!inv[site])        inv[site] = {};
+    if (!inv[site][atype]) inv[site][atype] = new Set();
+    inv[site][atype].add(amid);
+  });
+  // Convert Sets → counts
+  const result = {};
+  Object.entries(inv).forEach(([site, types]) => {
+    result[site] = {};
+    Object.entries(types).forEach(([t, s]) => { result[site][t] = s.size; });
+  });
+  return result;
+}
+
 // Add one space reservation record into the spaceByLocDay structure.
 // entry: { txn, intervals: {amenityId:[[s,e]]}, afterHoursTxn }
 function spaceEntryAdd(map, loc, date, atype, r) {
@@ -2293,12 +2318,14 @@ function openCMEditor(siteName) {
 
 function renderWeekAheadGrid(recs, stats) {
   const today = todayStr();
-  // Generate next 14 calendar days then keep only Mon–Fri (CM ops are weekdays only)
   const days = Array.from({length: 14}, (_, i) => addDays(today, i))
     .filter(d => { const dow = new Date(d + 'T12:00:00').getDay(); return dow !== 0 && dow !== 6; })
-    .slice(0, 5); // show exactly the next 5 business days
+    .slice(0, 5);
   const locations = REF() ? REF().sites.map(s => s.siteName)
     : [...new Set(recs.map(r => r._canonicalSite || r.site).filter(Boolean))].sort();
+  // Build space inventory from ALL uploaded records (not just the week window)
+  // so denominator reflects the full set of reservable spaces in the file.
+  const spaceInventory = buildSpaceInventory(state.records);
 
   if (!locations.length) {
     return '<div class="empty-state" style="padding:32px">Upload data to see the week-ahead capacity view.</div>';
@@ -2369,7 +2396,7 @@ function renderWeekAheadGrid(recs, stats) {
   });
 
   // Render space type breakdown: time-weighted biz-hours occupancy + after-hours section
-  function spaceBreakdownHtml(typeMap, refSite, small) {
+  function spaceBreakdownHtml(typeMap, refSite, small, siteInventory) {
     if (!typeMap || !Object.keys(typeMap).length) return '';
     const CAP_KEY = { 'Workstation':'workstations','Private Office':'privateOffices','Office':'privateOffices','Staff VP Office':'privateOffices','VP Office':'privateOffices','Focus Room':'meetingRooms','Meeting Room':'meetingRooms','Capsule':'capsules' };
     const fs = small ? '8px' : '9px'; const fsAH = small ? '7.5px' : '8.5px';
@@ -2383,7 +2410,9 @@ function renderWeekAheadGrid(recs, stats) {
 
     let bizHtml='', ahHtml='', hasAH=false;
     Object.entries(typeMap).forEach(([t, data]) => {
-      const cap   = refSite?.capacity?.[CAP_KEY[t]] || 0;
+      // Prefer actual unique AMENITY_IDs from uploaded file (more accurate than reference.xlsx,
+      // which includes permanently-assigned non-reservable spaces). Fall back to reference if needed.
+      const cap = siteInventory?.[t] || refSite?.capacity?.[CAP_KEY[t]] || 0;
       const txn   = spaceEntryTxn(data);
       const ivs   = typeof data==='object' ? (data.intervals||{}) : {};
       const ahTxn = typeof data==='object' ? (data.afterHoursTxn||0) : 0;
@@ -2509,7 +2538,7 @@ function renderWeekAheadGrid(recs, stats) {
       // Space-reservations-only day (no M/E/T activity, no PTO)
       if (!dayRecs.length && !ptoOut && spaceCount) {
         html += `<td style="${tdBase}">
-          <div style="padding:6px 8px">${spaceBreakdownHtml(spaceTypes, refSite, false)}</div>
+          <div style="padding:6px 8px">${spaceBreakdownHtml(spaceTypes, refSite, false, spaceInventory[loc])}</div>
         </td>`;
         return;
       }
@@ -2536,7 +2565,7 @@ function renderWeekAheadGrid(recs, stats) {
       const orderedRecs  = [...vipRecs, ...travelerRecs, ...otherRecs];
 
       const recItems = orderedRecs.map(recRow).join('');
-      const spaceBreakdown = spaceBreakdownHtml(spaceTypes, refSite, true);
+      const spaceBreakdown = spaceBreakdownHtml(spaceTypes, refSite, true, spaceInventory[loc]);
       const spaceItem = spaceBreakdown
         ? `<div style="padding-top:4px;margin-top:3px;border-top:1px solid rgba(0,0,0,.08)">${spaceBreakdown}</div>` : '';
       const dailyNarrative = managerOverlay.narratives[loc]?.days?.[h.d] || '';
@@ -2586,6 +2615,7 @@ function exportWeekAheadPDF() {
   const allRecs = getFiltered();
   const stats  = buildSiteDayStats(allRecs);
   const locations = [...new Set(allRecs.filter(r => r._canonicalSite).map(r => r._canonicalSite))].sort();
+  const spaceInventory = buildSpaceInventory(state.records);
 
   // Amenity type → reference capacity field (covers actual AMENITY_TYPE strings in the Space Report)
   const CAP_KEY = {
@@ -2727,7 +2757,7 @@ function exportWeekAheadPDF() {
         function pdfUnionMins(ivs){if(!ivs||!ivs.length)return 0;const s=[...ivs].sort((a,b)=>a[0]-b[0]);let cs=s[0][0],ce=s[0][1],t=0;for(let i=1;i<s.length;i++){if(s[i][0]<=ce)ce=Math.max(ce,s[i][1]);else{t+=ce-cs;cs=s[i][0];ce=s[i][1];}}return t+(ce-cs);}
         let spaceLines='', ahLines='', hasAH=false;
         Object.entries(spaceTypes).forEach(([t, data]) => {
-          const cap   = refSite?.capacity?.[CAP_KEY[t]] || 0;
+          const cap   = spaceInventory[loc]?.[t] || refSite?.capacity?.[CAP_KEY[t]] || 0;
           const txn   = spaceEntryTxn(data);
           const ivs   = typeof data==='object' ? (data.intervals||{}) : {};
           const ahTxn = typeof data==='object' ? (data.afterHoursTxn||0) : 0;

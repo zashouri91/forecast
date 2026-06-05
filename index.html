@@ -492,14 +492,30 @@ select:focus,input:focus{border-color:#4338CA;box-shadow:0 0 0 3px rgba(67,56,20
 // ── STATE ──────────────────────────────────────────────────────────────────
 const state = { step:1, files:[], records:[] };
 // User-overridden CM assignments per site (add/edit/delete via UI)
-let cmOverrides = {}; // { siteName: ['CM1', 'CM2', ...] }
-let managerOverlay = { pto: {}, effortOverrides: {}, narratives: {} };
-// managerOverlay.pto        = { site: { date: count } }
-// managerOverlay.effortOverrides = { recordId: number }
-// managerOverlay.narratives = { site: { week: '', mon:'', tue:'', ... by date } }
+let cmOverrides = {};    // { siteName: ['CM1', 'CM2', ...] }
+let cmSupervisors = {}; // { siteName: 'SupervisorName' }  — one per site
+let managerOverlay = { pto: {}, ptoCMs: {}, narratives: {} };
+// managerOverlay.pto    = { site: { date: countOut } }          — count-based fallback
+// managerOverlay.ptoCMs = { site: { date: ['CM Name', ...] } }  — name-based (from Manager Review)
+// managerOverlay.narratives = { site: { week: '', days: { 'YYYY-MM-DD': '' } } }
 function getCMsForSite(siteName) {
   if (cmOverrides[siteName]) return cmOverrides[siteName];
   return REF()?.bySiteName?.[siteName.toLowerCase()]?.assignedCMs || [];
+}
+function getSupervisorForSite(siteName) {
+  return cmSupervisors[siteName] || null;
+}
+// Returns 'red' | 'amber' | 'normal' based on coverage gaps (not load math)
+function coverageFlag(loc, date) {
+  const ptoCMNames = managerOverlay.ptoCMs?.[loc]?.[date] || [];
+  const cmsOutByName = ptoCMNames.length;
+  // Fall back to count if no name-level data
+  const cmsOut = cmsOutByName > 0 ? cmsOutByName : Math.round(getPTO(loc, date));
+  const supervisor = getSupervisorForSite(loc);
+  const supervisorOut = supervisor && ptoCMNames.includes(supervisor);
+  if (cmsOut >= 2 || (supervisorOut && cmsOut >= 1)) return 'red';
+  if (cmsOut >= 1 || supervisorOut) return 'amber';
+  return 'normal';
 }
 const filterState = { sites:new Set(['all']), regions:new Set(['all']), cms:new Set(['all']), rtypes:new Set(['all']), statuses:new Set(['all']) };
 let charts = {};
@@ -702,7 +718,7 @@ function handleFiles(fileList) {
 
 function showOverlayBanner() {
   const ptoSites  = Object.keys(managerOverlay.pto).length;
-  const effCount  = Object.keys(managerOverlay.effortOverrides).length;
+  const effCount  = 0; // effort overrides removed
   const narSites  = Object.keys(managerOverlay.narratives).length;
   const existing  = document.getElementById('overlay-banner');
   if (existing) existing.remove();
@@ -715,7 +731,7 @@ function showOverlayBanner() {
       Applied: ${ptoSites} site(s) with PTO · ${effCount} effort override(s) · ${narSites} site narrative(s).
       <span style="color:#94A3B8;margin-left:8px">Re-upload data files to see updated dashboard.</span>
     </div>
-    <button onclick="managerOverlay={pto:{},effortOverrides:{},narratives:{}};this.closest('#overlay-banner').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#94A3B8;font-size:16px" title="Clear overlay">✕</button>`;
+    <button onclick="managerOverlay={pto:{},ptoCMs:{},narratives:{}};this.closest('#overlay-banner').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#94A3B8;font-size:16px" title="Clear overlay">✕</button>`;
   const zone = document.getElementById('upload-zone');
   if (zone) zone.insertAdjacentElement('afterend', banner);
 }
@@ -1111,99 +1127,58 @@ async function exportManagerReview() {
     [`Week: ${weekLabel}   ·   Generated: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`, '', ''],
     ['','',''],
     ['HOW TO USE THIS FILE','',''],
-    ['1.  Review the Records, PTO, and Narratives sheets below.','',''],
+    ['1.  Review the PTO and Narratives sheets below.','',''],
     ['2.  Fill in only the columns marked ✏️ — do not edit any other columns.','',''],
-    ['3.  Save this file when done.','',''],
-    ['4.  Go to Step 1 of the PulsePoint Forecast tool.','',''],
-    ['5.  Upload this file alongside your original data files. The tool will detect','',''],
-    ['    it automatically and apply all your inputs to the dashboard.','',''],
-    ['','',''],
-    ['─────────────────────────────────────────────────────────','',''],
-    ['','',''],
-    ['RECORDS SHEET  —  adjust effort level per activity','',''],
-    ['Column to fill:','✏️ Effort Override (Column M)',''],
-    ['','',''],
-    ['Effort Level','Meaning','Good for...'],
-    ['1  –  Light','Less effort than a standard meeting','Quick check-ins, brief 1:1s, drop-ins'],
-    ['2  –  Standard','Default model weight (same as leaving blank)','Regular meetings, routine events'],
-    ['3  –  Heavy','Roughly 2× a standard meeting','Complex programs, multi-part events, senior visitors'],
-    ['4  –  Major Event','Roughly 4× a standard meeting','All-hands, large external conferences, exec summits'],
+    ['3.  Save this file and upload it back to the PulsePoint Forecast tool','',''],
+    ['    alongside your original data files. The tool detects it automatically.','',''],
     ['','',''],
     ['─────────────────────────────────────────────────────────','',''],
     ['','',''],
     ['PTO SHEET  —  mark which CMs are out each day','',''],
     ['Column to fill:','✏️ PTO Type (Column E)',''],
     ['','',''],
-    ['PTO Type','Effect on capacity',''],
-    ['Full Day',"CM’s full daily capacity is removed",''],
-    ['Half Day',"50% of CM’s capacity is removed",''],
-    ['WFH',"50% of CM’s capacity is removed (reduced effectiveness)",''],
+    ['PTO Type','What it means',''],
+    ['Full Day','CM is fully out of the office for the day',''],
+    ['Half Day','CM works a partial day (50% availability)',''],
+    ['WFH','CM is working from home (reduced effectiveness)',''],
     ['','',''],
     ['─────────────────────────────────────────────────────────','',''],
     ['','',''],
-    ['NARRATIVES SHEET  —  add weekly and daily context per site','',''],
-    ['Week Summary:','Appears next to the site name in the dashboard and PDF.',''],
-    ['Daily columns:','Appears at the bottom of each day cell in the grid and PDF.',''],
+    ['NARRATIVES SHEET  —  add context per site','',''],
+    ['Week Summary:','Short note for the week — appears in the site column of the dashboard and PDF.',''],
+    ['Daily columns:','Short note for a specific day — appears at the bottom of each day cell.',''],
+    ['','',''],
+    ['Example week summary:','"Light week — VIP visits Thur/Fri, CEC Atlanta opening."',''],
+    ['Example daily:','"Coordinating exec site visit + Q3 all-hands prep."',''],
   ];
   const wsHow = XLSX.utils.aoa_to_sheet(howRows);
   wsHow['!cols'] = [{wch:52},{wch:42},{wch:40}];
   XLSX.utils.book_append_sheet(wb, wsHow, '📋 How to Use');
 
   // ═══════════════════════════════════════════════════════════
-  // Sheet 1: Records  (col A = hidden _id; col M = editable dropdown)
+  // Sheet 1: Records  (read-only reference — no editable columns)
   // ═══════════════════════════════════════════════════════════
-  const EFFORT_COL = 'M'; // 13th column (0-indexed = 12)
   const recHead = [
-    '_id',          // A — hidden
-    'Site',         // B
-    'Date',         // C
-    'Day',          // D
-    'Type',         // E
-    'Name / Traveler', // F
-    'VIP',          // G
-    'Attendees',    // H
-    'Status',       // I
-    'Room',         // J
-    'Catering',     // K
-    'Budget',       // L
-    '✏️ Effort Override', // M — EDITABLE
-    'Notes',        // N
+    'Site', 'Date', 'Day', 'Type', 'Name / Traveler',
+    'VIP', 'Attendees', 'Status', 'Room', 'Catering', 'Budget', 'Notes',
   ];
   const recRows = [recHead];
   recs.forEach(r => {
     const dt = r.date ? new Date(r.date+'T12:00:00') : null;
     recRows.push([
-      recordId(r), r._canonicalSite||r.site||'', r.date||'',
+      r._canonicalSite||r.site||'', r.date||'',
       dt ? dt.toLocaleDateString('en-US',{weekday:'long'}) : '',
       r._type||'', r.event_name||r.vip||'', r.vip||'',
       r.attendees||'', r.status||'', r.room||'',
-      r.catering||'', r.budget||'',
-      '', // ← Effort Override: editable
-      r.notes||'',
+      r.catering||'', r.budget||'', r.notes||'',
     ]);
   });
   const wsRec = XLSX.utils.aoa_to_sheet(recRows);
-
-  // Hide _id column, set widths
   wsRec['!cols'] = [
-    {wch:0, hidden:true}, // A: _id (hidden)
-    {wch:18}, // B: Site
-    {wch:12}, // C: Date
-    {wch:12}, // D: Day
-    {wch:11}, // E: Type
-    {wch:36}, // F: Name
-    {wch:26}, // G: VIP
-    {wch:10}, // H: Attendees
-    {wch:14}, // I: Status
-    {wch:22}, // J: Room
-    {wch:30}, // K: Catering
-    {wch:12}, // L: Budget
-    {wch:22}, // M: Effort Override ← editable
-    {wch:36}, // N: Notes
+    {wch:18}, {wch:12}, {wch:12}, {wch:11}, {wch:36},
+    {wch:26}, {wch:10}, {wch:14}, {wch:22}, {wch:30}, {wch:12}, {wch:36},
   ];
   wsRec['!freeze'] = {xSplit:0, ySplit:1};
-  addComment(wsRec, `${EFFORT_COL}1`,
-    'SELECT FROM DROPDOWN — or leave blank for default.\n\n1 - Light: low effort, quick check-in\n2 - Standard: normal meeting or event (default)\n3 - Heavy: complex program, exec visit\n4 - Major Event: all-hands, large conference\n\nDo not edit any other columns.');
   XLSX.utils.book_append_sheet(wb, wsRec, 'Records');
 
   // ═══════════════════════════════════════════════════════════
@@ -1385,9 +1360,9 @@ async function exportManagerReview() {
 
 // ── MANAGER OVERLAY PARSER ──────────────────────────────────────────────────
 function parseOverlay(wb) {
-  const overlay = { pto: {}, effortOverrides: {}, narratives: {} };
+  const overlay = { pto: {}, ptoCMs: {}, narratives: {} };
 
-  // ── PTO sheet ──
+  // ── PTO sheet — track both count and per-CM names ──
   const wsPto = wb.Sheets['PTO'];
   if (wsPto) {
     const rows = XLSX.utils.sheet_to_json(wsPto, {header:1,defval:''});
@@ -1397,32 +1372,23 @@ function parseOverlay(wb) {
     const iCM   = head.findIndex(h=>h.includes('cm name'));
     const iPTO  = head.findIndex(h=>h.includes('pto type'));
     rows.slice(1).forEach(row => {
-      const site = String(row[iSite]||'').trim();
-      const date = String(row[iDate]||'').trim();
-      const pto  = String(row[iPTO] ||'').trim().toLowerCase();
+      const site   = String(row[iSite]||'').trim();
+      const date   = String(row[iDate]||'').trim();
+      const cmName = iCM >= 0 ? String(row[iCM]||'').trim() : '';
+      const pto    = String(row[iPTO] ||'').trim().toLowerCase();
       if (!site||!date||!pto) return;
+      // Count-based (for backward compat with getPTO)
       if (!overlay.pto[site]) overlay.pto[site] = {};
       const prev = overlay.pto[site][date] || 0;
-      // Full Day = 1 CM out, Half Day = 0.5
-      const val = pto.includes('full') ? 1 : pto.includes('half') || pto.includes('wfh') ? 0.5 : 0;
+      const val  = pto.includes('full') ? 1 : pto.includes('half') || pto.includes('wfh') ? 0.5 : 0;
       overlay.pto[site][date] = prev + val;
+      // Name-based (for supervisor detection)
+      if (cmName && val >= 0.5) {
+        if (!overlay.ptoCMs[site]) overlay.ptoCMs[site] = {};
+        if (!overlay.ptoCMs[site][date]) overlay.ptoCMs[site][date] = [];
+        if (!overlay.ptoCMs[site][date].includes(cmName)) overlay.ptoCMs[site][date].push(cmName);
+      }
     });
-  }
-
-  // ── Records sheet — effort overrides ──
-  const wsRec = wb.Sheets['Records'];
-  if (wsRec) {
-    const rows = XLSX.utils.sheet_to_json(wsRec, {header:1,defval:''});
-    const head = (rows[0]||[]).map(h=>String(h).toLowerCase().trim());
-    const iId  = head.findIndex(h=>h==='_id');
-    const iEff = head.findIndex(h=>h.includes('effort'));
-    if (iId>=0 && iEff>=0) {
-      rows.slice(1).forEach(row => {
-        const id  = String(row[iId]||'').trim();
-        const eff = parseFloat(String(row[iEff]||''));
-        if (id && !isNaN(eff) && eff>0) overlay.effortOverrides[id] = eff;
-      });
-    }
   }
 
   // ── Narratives sheet ──
@@ -1852,14 +1818,7 @@ function buildSiteDayStats(records) {
     // Apply manager effort override: compute delta vs default weight and accumulate
     if (r._type !== 'space') {
       const rid = recordId(r);
-      const effOvr = managerOverlay.effortOverrides[rid];
-      if (effOvr !== undefined) {
-        const def = r._type==='meeting' ? MODEL.wMeeting
-                  : r._type==='event'   ? MODEL.wEvent
-                  : r._type==='traveler'? MODEL.wTraveler * mult
-                  : 0;
-        row.effortDelta = (row.effortDelta||0) + (effOvr - def);
-      }
+// (effort override removed)
     }
   });
 
@@ -1881,7 +1840,7 @@ function buildSiteDayStats(records) {
         (row.attendees / MODEL.attendeeDivisor) +
         (row.catering * MODEL.wCatering) +
         (row.travelers * MODEL.wTraveler)
-      ) + (row.effortDelta || 0); // manager effort overrides delta
+      ); // load calculation
       const rawUtil = cap > 0 ? (row.load / cap) : 0;
       // Baseline floor: CMs are never at 0% even with zero bookings.
       // Accounts for site walks, supply checks, ad-hoc associate requests, etc.
@@ -2206,70 +2165,67 @@ function countBy(recs, key) {
 
 // ── CM EDITOR ──────────────────────────────────────────────────────────────
 function openCMEditor(siteName) {
-  // Remove any existing modal
   const existing = document.getElementById('cm-editor-modal');
   if (existing) existing.remove();
 
-  const currentCMs = getCMsForSite(siteName).slice(); // copy
+  const currentCMs = getCMsForSite(siteName).slice();
+  let currentSupervisor = cmSupervisors[siteName] || '';
 
   const modal = document.createElement('div');
   modal.id = 'cm-editor-modal';
   modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.45)';
 
   function renderModal() {
-    const tags = currentCMs.map((cm, i) =>
-      `<span style="display:inline-flex;align-items:center;gap:5px;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:20px;padding:3px 10px 3px 12px;font-size:12px;font-weight:500;color:#3730A3;margin:3px">
-        ${escapeHtml(cm)}
-        <button onclick="(function(){window.__cmEditorList.splice(${i},1);window.__cmEditorRender();})()" style="background:none;border:none;cursor:pointer;color:#818CF8;font-size:14px;line-height:1;padding:0 0 1px 2px" title="Remove">&times;</button>
-      </span>`
-    ).join('');
+    const sup = window.__cmEditorSup;
+    const tags = window.__cmEditorList.map((cm, i) => {
+      const isSup = cm === sup;
+      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid ${isSup ? '#FDE68A' : '#E2E8F0'};border-radius:8px;background:${isSup ? '#FFFBEB' : '#F8FAFC'};margin-bottom:6px">
+        <button title="${isSup ? 'Remove supervisor' : 'Set as supervisor'}"
+          onclick="(function(){window.__cmEditorSup=window.__cmEditorSup===window.__cmEditorList[${i}]?'':window.__cmEditorList[${i}];window.__cmEditorRender();})()"
+          style="background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;color:${isSup ? '#F59E0B' : '#CBD5E1'}">★</button>
+        <span style="flex:1;font-size:12px;font-weight:${isSup ? '700' : '500'};color:${isSup ? '#92400E' : '#374151'}">${escapeHtml(cm)}${isSup ? ' <span style=\'font-size:9px;background:#FEF3C7;color:#92400E;border-radius:4px;padding:1px 5px;margin-left:4px\'>Supervisor</span>' : ''}</span>
+        <button onclick="(function(){const l=window.__cmEditorList;l.splice(${i},1);if(window.__cmEditorSup===window.__cmEditorList[${i}])window.__cmEditorSup='';window.__cmEditorRender();})()"
+          style="background:none;border:none;cursor:pointer;color:#CBD5E1;font-size:16px;line-height:1;padding:0" title="Remove">&times;</button>
+      </div>`;
+    }).join('');
 
     modal.innerHTML = `
-      <div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.2);padding:24px 28px;min-width:380px;max-width:480px;width:90vw">
+      <div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.2);padding:24px 28px;min-width:400px;max-width:500px;width:90vw">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <div>
             <div style="font-size:16px;font-weight:800;color:#1E293B;letter-spacing:-.02em">Edit CMs — ${escapeHtml(siteName)}</div>
-            <div style="font-size:11px;color:#94A3B8;margin-top:2px">Add, edit, or remove community managers for this location</div>
+            <div style="font-size:11px;color:#94A3B8;margin-top:2px">Tap ★ to designate the site supervisor</div>
           </div>
           <button onclick="document.getElementById('cm-editor-modal').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#94A3B8;line-height:1;padding:2px 4px" title="Close">&times;</button>
         </div>
-        <div style="min-height:40px;padding:8px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFC;margin-bottom:14px;line-height:1">
-          ${tags || '<span style="font-size:12px;color:#CBD5E1;padding:4px">No CMs assigned — add one below</span>'}
+        <div style="min-height:44px;margin-bottom:14px">
+          ${tags || '<div style="font-size:12px;color:#CBD5E1;padding:8px 4px">No CMs assigned — add one below</div>'}
         </div>
         <div style="display:flex;gap:8px;margin-bottom:20px">
-          <input id="cm-editor-input" type="text" placeholder="Full name (e.g. Jane Smith)" 
+          <input id="cm-editor-input" type="text" placeholder="Full name (e.g. Jane Smith)"
             style="flex:1;padding:8px 12px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px;outline:none;color:#1E293B"
-            onkeydown="if(event.key==='Enter'){document.getElementById('cm-editor-add-btn').click()}"
-          >
-          <button id="cm-editor-add-btn" onclick="(function(){const inp=document.getElementById('cm-editor-input');const val=inp.value.trim();if(!val)return;if(!window.__cmEditorList.includes(val)){window.__cmEditorList.push(val);}inp.value='';window.__cmEditorRender();})()"
-            style="background:#4338CA;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer">
-            Add
-          </button>
+            onkeydown="if(event.key==='Enter'){document.getElementById('cm-editor-add-btn').click()}">
+          <button id="cm-editor-add-btn"
+            onclick="(function(){const inp=document.getElementById('cm-editor-input');const val=inp.value.trim();if(!val)return;if(!window.__cmEditorList.includes(val))window.__cmEditorList.push(val);inp.value='';window.__cmEditorRender();})()"
+            style="background:#4338CA;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer">Add</button>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button onclick="document.getElementById('cm-editor-modal').remove()"
-            style="padding:8px 18px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px;color:#64748B;background:#fff;cursor:pointer">
-            Cancel
-          </button>
-          <button onclick="(function(){cmOverrides[window.__cmEditorSite]=window.__cmEditorList.slice();document.getElementById('cm-editor-modal').remove();renderDashboard();})()"
-            style="padding:8px 20px;background:#4338CA;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
-            Save
-          </button>
+            style="padding:8px 18px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px;color:#64748B;background:#fff;cursor:pointer">Cancel</button>
+          <button onclick="(function(){const site=window.__cmEditorSite;cmOverrides[site]=window.__cmEditorList.slice();if(window.__cmEditorSup)cmSupervisors[site]=window.__cmEditorSup;else delete cmSupervisors[site];document.getElementById('cm-editor-modal').remove();renderDashboard();})()"
+            style="padding:8px 20px;background:#4338CA;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Save</button>
         </div>
       </div>`;
-    // focus input
     setTimeout(() => { const inp = document.getElementById('cm-editor-input'); if (inp) inp.focus(); }, 50);
   }
 
-  // Expose list, site name, and re-render fn to window for inline onclick access
   window.__cmEditorList = currentCMs;
+  window.__cmEditorSup  = currentSupervisor;
   window.__cmEditorSite = siteName;
   window.__cmEditorRender = renderModal;
 
   document.body.appendChild(modal);
   renderModal();
-
-  // Close on backdrop click
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 }
 
@@ -2370,13 +2326,13 @@ function renderWeekAheadGrid(recs, stats) {
     }).join('');
   }
 
+  // Coverage-based flags (not load math)
   const C = {
-    high:     { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B', headerBg: '#FEE2E2', label: 'High' },
-    elevated: { bg: '#FFFBEB', border: '#FDE68A', text: '#92400E', headerBg: '#FEF3C7', label: 'Busy' },
-    normal:   { bg: '#F0FDF4', border: '#BBF7D0', text: '#065F46', headerBg: '#DCFCE7', label: 'OK' },
+    red:    { border: '#EF4444', headerBg: '#FEF2F2', text: '#DC2626', label: 'Understaffed' },
+    amber:  { border: '#F59E0B', headerBg: '#FFFBEB', text: '#92400E', label: 'Coverage Gap'  },
+    normal: { border: '#E2E8F0', headerBg: '#F8FAFC', text: '#64748B', label: ''               },
   };
 
-  // Type styles for record rows
   const T = {
     meeting:  { dot: '#3B82F6', label: 'Mtg' },
     event:    { dot: '#EC4899', label: 'Evt' },
@@ -2421,13 +2377,20 @@ function renderWeekAheadGrid(recs, stats) {
   locations.forEach((loc, idx) => {
     html += `<tr style="background:${idx%2===0?'#FAFAFA':'#FFFFFF'};vertical-align:top">`;
     const cmList = getCMsForSite(loc);
+    const supervisor = getSupervisorForSite(loc);
     const weekNarr = managerOverlay.narratives[loc]?.week || '';
+    const cmDisplay = cmList.map(cm => {
+      const isSup = supervisor && cm === supervisor;
+      return isSup
+        ? `<span style="color:#92400E;font-weight:700">★ ${escapeHtml(cm)}</span>`
+        : escapeHtml(cm);
+    }).join(', ');
     html += `<td style="padding:10px 14px;border-bottom:1px solid #F1F5F9;border-right:1px solid #F1F5F9">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px">
         <div style="font-size:12px;font-weight:700;color:#1E293B">${escapeHtml(loc)}</div>
         <button onclick="openCMEditor(window.__weekAheadSites[${idx}])" title="Edit CMs" style="background:none;border:none;cursor:pointer;color:#CBD5E1;padding:0;flex-shrink:0;line-height:1;font-size:13px" onmouseover="this.style.color='#6366F1'" onmouseout="this.style.color='#CBD5E1'">✎</button>
       </div>
-      ${cmList.length ? `<div style="font-size:10px;color:#94A3B8;margin-top:2px">${cmList.map(escapeHtml).join(', ')}</div>` : ''}
+      ${cmList.length ? `<div style="font-size:10px;color:#94A3B8;margin-top:2px;line-height:1.5">${cmDisplay}</div>` : ''}
       ${weekNarr ? `<div style="font-size:9px;font-style:italic;color:#94A3B8;margin-top:4px;padding-top:3px;border-top:1px dashed #E2E8F0;line-height:1.4">${escapeHtml(weekNarr)}</div>` : ''}
     </td>`;
 
@@ -2454,20 +2417,31 @@ function renderWeekAheadGrid(recs, stats) {
         return;
       }
 
-      const status = row ? (row.flags?.status || riskStatus(row.util, false)) : 'normal';
-      const c = C[status] || C.normal;
-      const utilPct = row ? Math.round(row.util * 100) : (ptoOut ? Math.round((MODEL.baselineLoad||0)) : 0);
+      const flag = coverageFlag(loc, h.d);
+      const c = C[flag] || C.normal;
 
-      const recItems = dayRecs.map(recRow).join('');
-      const ptoItem = ptoOut
-        ? `<div style="display:flex;align-items:center;gap:5px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.05)">
-            <span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;flex-shrink:0;margin-top:1px"></span>
-            <div style="font-size:10px;font-weight:600;color:#92400E">${ptoOut} CM on PTO</div>
-          </div>` : '';
+      // Staff coverage line
+      const supervisor = getSupervisorForSite(loc);
+      const ptoCMNames = managerOverlay.ptoCMs?.[loc]?.[h.d] || [];
+      const totalCMs = getCMsForSite(loc).length;
+      const cmsOutCount = ptoCMNames.length > 0 ? ptoCMNames.length : Math.round(ptoOut);
+      const supervisorOut = supervisor && ptoCMNames.includes(supervisor);
+      let staffParts = [];
+      if (totalCMs > 0) staffParts.push(`${Math.max(0, totalCMs - cmsOutCount)}/${totalCMs} CMs`);
+      if (supervisorOut) staffParts.push(`${escapeHtml(supervisor)} out`);
+      else if (cmsOutCount > 0) staffParts.push(`${cmsOutCount} out`);
+      const staffLine = staffParts.join(' · ') || (totalCMs > 0 ? `${totalCMs} CMs` : '');
+
+      // Separate VIPs, travelers, meetings/events for ordering
+      const vipRecs      = dayRecs.filter(r => hasVip(r) && r._type !== 'traveler');
+      const travelerRecs = dayRecs.filter(r => r._type === 'traveler');
+      const otherRecs    = dayRecs.filter(r => !hasVip(r) && r._type !== 'traveler');
+      const orderedRecs  = [...vipRecs, ...travelerRecs, ...otherRecs];
+
+      const recItems = orderedRecs.map(recRow).join('');
       const spaceBreakdown = spaceBreakdownHtml(spaceTypes, refSite, true);
       const spaceItem = spaceBreakdown
         ? `<div style="padding-top:4px;margin-top:3px;border-top:1px solid rgba(0,0,0,.08)">${spaceBreakdown}</div>` : '';
-
       const dailyNarrative = managerOverlay.narratives[loc]?.days?.[h.d] || '';
       const narrativeItem = dailyNarrative
         ? `<div style="margin-top:4px;padding:4px 6px;background:#F8FAFC;border-radius:4px;border-left:2px solid #CBD5E1">
@@ -2476,11 +2450,11 @@ function renderWeekAheadGrid(recs, stats) {
 
       html += `<td style="${tdBase}">
         <div style="border-left:3px solid ${c.border}">
-          <div style="background:${c.headerBg};padding:5px 8px;display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <span style="font-size:11px;font-weight:700;color:${c.text}">${utilPct}%</span>
-            <span style="font-size:9px;font-weight:700;color:${c.text};text-transform:uppercase;letter-spacing:.05em;opacity:.8">${c.label}</span>
+          <div style="background:${c.headerBg};padding:4px 8px;display:flex;align-items:center;justify-content:space-between;gap:4px">
+            <span style="font-size:10px;font-weight:600;color:${c.text}">${staffLine}</span>
+            ${flag !== 'normal' ? `<span style="font-size:9px;font-weight:700;color:${c.text};white-space:nowrap">⚠ ${c.label}</span>` : ''}
           </div>
-          <div style="padding:4px 8px 6px">${recItems}${ptoItem}${spaceItem}${narrativeItem}</div>
+          <div style="padding:4px 8px 6px">${recItems}${spaceItem}${narrativeItem}</div>
         </div>
       </td>`;
     });
@@ -2489,16 +2463,15 @@ function renderWeekAheadGrid(recs, stats) {
 
   html += `</tbody></table></div>
   <div style="display:flex;gap:16px;margin-top:14px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0">
-    <span style="font-size:11px;color:#64748B;font-weight:700">How to read:</span>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Green</b> — capacity to spare</span></div>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Amber</b> — stretched</span></div>
-    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FEF2F2;border:1px solid #FECACA;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Red</b> — at/over capacity</span></div>
+    <span style="font-size:11px;color:#64748B;font-weight:700">Staff flags:</span>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FEF2F2;border-left:3px solid #EF4444;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Red</b> — 2+ CMs out, or supervisor + CM out</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:2px"></div><span style="font-size:11px;color:#64748B"><b>Amber</b> — 1 CM out, or supervisor out</span></div>
     <div style="display:flex;align-items:center;gap:8px;border-left:1px solid #E2E8F0;padding-left:12px">
+      <span style="font-size:11px;color:#64748B;font-weight:700">Items:</span>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#3B82F6;display:inline-block"></span><span style="font-size:10px;color:#64748B">Meeting</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#EC4899;display:inline-block"></span><span style="font-size:10px;color:#64748B">Event</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block"></span><span style="font-size:10px;color:#64748B">Traveler</span></div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block"></span><span style="font-size:10px;color:#64748B">CM on PTO</span></div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#94A3B8;display:inline-block"></span><span style="font-size:10px;color:#64748B">Desk Reservations</span></div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:#92400E;font-weight:700">★</span><span style="font-size:10px;color:#64748B">Supervisor</span></div>
     </div>
   </div>`;
 
@@ -2554,10 +2527,11 @@ function exportWeekAheadPDF() {
     }
   });
 
+  // Coverage-based flags (matches dashboard)
   const C = {
-    high:     { bg: '#FEE2E2', border: '#F87171', text: '#991B1B', pill: '#DC2626', label: 'HIGH' },
-    elevated: { bg: '#FEF3C7', border: '#FCD34D', text: '#92400E', pill: '#D97706', label: 'BUSY' },
-    normal:   { bg: '#F0FDF4', border: '#86EFAC', text: '#065F46', pill: '#16A34A', label: 'OK'   },
+    red:    { border: '#EF4444', bg: '#FEF2F2', text: '#DC2626', label: 'UNDERSTAFFED' },
+    amber:  { border: '#F59E0B', bg: '#FFFBEB', text: '#92400E', label: 'COVERAGE GAP' },
+    normal: { border: '#E2E8F0', bg: '#F8FAFC', text: '#64748B', label: ''              },
   };
 
   // Day column headers
@@ -2577,9 +2551,14 @@ function exportWeekAheadPDF() {
     const cmList = getCMsForSite(loc);
 
     const pdfWeekNarr = managerOverlay.narratives[loc]?.week || '';
+    const pdfSupervisor = getSupervisorForSite(loc);
+    const pdfCMLines = cmList.map(cm => {
+      const isSup = pdfSupervisor && cm === pdfSupervisor;
+      return `<span style="white-space:nowrap;display:block;${isSup ? 'color:#92400E;font-weight:700' : ''}">${isSup ? '★ ' : ''}${escapeHtml(cm)}</span>`;
+    }).join('');
     let cells = `<td style="padding:10px 12px;border-right:2px solid #e2e8f0;background:${rowBg};vertical-align:top;min-width:130px">
       <div style="font-size:12px;font-weight:800;color:#1e293b;letter-spacing:-.02em">${escapeHtml(loc)}</div>
-      ${cmList.length ? `<div style="font-size:8.5px;color:#94a3b8;margin-top:2px;line-height:1.5">${cmList.map(cm => `<span style="white-space:nowrap;display:block">${escapeHtml(cm)}</span>`).join('')}</div>` : ''}
+      ${cmList.length ? `<div style="font-size:8.5px;color:#94a3b8;margin-top:2px;line-height:1.5">${pdfCMLines}</div>` : ''}
       ${pdfWeekNarr ? `<div style="margin-top:5px;padding:3px 5px 4px;background:#F8FAFC;border-left:2px solid #CBD5E1;border-radius:2px"><div style="font-size:7.5px;font-style:italic;color:#475569;line-height:1.4">${escapeHtml(pdfWeekNarr)}</div></div>` : ''}
     </td>`;
 
@@ -2596,27 +2575,42 @@ function exportWeekAheadPDF() {
         return;
       }
 
-      const status  = row ? (row.flags?.status || riskStatus(row.util, false)) : 'normal';
-      const c       = C[status] || C.normal;
-      const utilPct = row ? Math.round(row.util * 100) : (MODEL.baselineLoad || 25);
+      const pdfFlag = coverageFlag(loc, h.d);
+      const c = C[pdfFlag] || C.normal;
 
-      // Record rows — capped at MAX_RECS to keep cells compact
+      // Staff line for PDF cell
+      const pdfSup = getSupervisorForSite(loc);
+      const pdfPtoCMs = managerOverlay.ptoCMs?.[loc]?.[h.d] || [];
+      const pdfTotalCMs = getCMsForSite(loc).length;
+      const pdfCMsOut = pdfPtoCMs.length > 0 ? pdfPtoCMs.length : Math.round(ptoOut);
+      const pdfSupOut = pdfSup && pdfPtoCMs.includes(pdfSup);
+      let pdfStaffParts = [];
+      if (pdfTotalCMs > 0) pdfStaffParts.push(`${Math.max(0, pdfTotalCMs - pdfCMsOut)}/${pdfTotalCMs} CMs`);
+      if (pdfSupOut) pdfStaffParts.push(`${escapeHtml(pdfSup)} out`);
+      else if (pdfCMsOut > 0) pdfStaffParts.push(`${pdfCMsOut} out`);
+      const pdfStaffLine = pdfStaffParts.join(' · ');
+
+      // Order: VIP meetings first, then travelers, then others
+      const pdfVipRecs      = dayRecs.filter(r => hasVip(r) && r._type !== 'traveler');
+      const pdfTravRecs     = dayRecs.filter(r => r._type === 'traveler');
+      const pdfOtherRecs    = dayRecs.filter(r => !hasVip(r) && r._type !== 'traveler');
+      const pdfOrderedRecs  = [...pdfVipRecs, ...pdfTravRecs, ...pdfOtherRecs];
+
       let items = '';
-      const visRecs  = dayRecs.slice(0, MAX_RECS);
-      const overflow = dayRecs.length - visRecs.length;
+      const visRecs  = pdfOrderedRecs.slice(0, MAX_RECS);
+      const overflow = pdfOrderedRecs.length - visRecs.length;
       visRecs.forEach(r => {
         const name  = r.event_name || r.vip || '—';
         const trunc = name.length > 34 ? name.slice(0, 32) + '…' : name;
         const dot   = r._type === 'event' ? '#EC4899' : r._type === 'traveler' ? '#10B981' : '#3B82F6';
+        const isVip = hasVip(r) && r._type !== 'traveler';
         const meta  = [];
         if (r.attendees > 0) meta.push(`${r.attendees} ppl`);
-        if (hasVip(r) && r._type !== 'traveler') {
-          const vn = String(r.vip); meta.push(`★ ${vn.length > 22 ? vn.slice(0,20)+'…' : vn}`);
-        }
+        if (isVip) { const vn = String(r.vip); meta.push(`★ ${vn.length > 22 ? vn.slice(0,20)+'…' : vn}`); }
         items += `<div style="display:flex;gap:4px;align-items:flex-start;padding:2px 0;border-bottom:1px solid rgba(0,0,0,.04)">
           <span style="width:5px;height:5px;border-radius:50%;background:${dot};flex-shrink:0;margin-top:3px"></span>
           <div style="min-width:0">
-            <div style="font-size:8.5px;font-weight:600;color:#1e293b;line-height:1.3">${escapeHtml(trunc)}</div>
+            <div style="font-size:${isVip ? '9px' : '8.5px'};font-weight:${isVip ? '700' : '600'};color:#1e293b;line-height:1.3">${escapeHtml(trunc)}</div>
             ${meta.length ? `<div style="font-size:7.5px;color:#64748b;margin-top:1px">${escapeHtml(meta.join(' · '))}</div>` : ''}
           </div>
         </div>`;
@@ -2625,18 +2619,13 @@ function exportWeekAheadPDF() {
         items += `<div style="font-size:8px;color:#94a3b8;font-style:italic;padding-top:2px">+${overflow} more</div>`;
       }
 
-      if (ptoOut) items += `<div style="display:flex;gap:5px;align-items:center;padding:3px 0;border-bottom:1px solid rgba(0,0,0,.04)">
-        <span style="width:6px;height:6px;border-radius:50%;background:#F59E0B;flex-shrink:0"></span>
-        <span style="font-size:9px;font-weight:600;color:#92400E">${ptoOut} CM on PTO</span>
-      </div>`;
-
       // Manager narrative
       const pdfNarrative = managerOverlay.narratives[loc]?.days?.[h.d] || '';
       if (pdfNarrative) items += `<div style="margin-top:4px;padding:3px 5px;background:#F8FAFC;border-left:2px solid #CBD5E1;border-radius:2px">
         <div style="font-size:7.5px;font-style:italic;color:#64748b;line-height:1.4">${escapeHtml(pdfNarrative)}</div>
       </div>`;
 
-      // Space type breakdown with XX/total (%)
+      // Space type breakdown
       if (spaceTotal) {
         let spaceLines = '';
         Object.entries(spaceTypes).forEach(([t, n]) => {
@@ -2651,9 +2640,9 @@ function exportWeekAheadPDF() {
 
       cells += `<td style="${tdStyle}">
         <div style="border-left:4px solid ${c.border}">
-          <div style="background:${c.bg};padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <span style="font-size:16px;font-weight:900;color:${c.text};letter-spacing:-.03em;line-height:1">${utilPct}%</span>
-            <span style="font-size:8px;font-weight:800;color:${c.pill === c.text ? c.text : c.pill};background:rgba(0,0,0,.07);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em">${c.label}</span>
+          <div style="background:${c.bg};padding:4px 8px;display:flex;align-items:center;justify-content:space-between;gap:4px">
+            <span style="font-size:9px;font-weight:600;color:${c.text}">${pdfStaffLine}</span>
+            ${pdfFlag !== 'normal' ? `<span style="font-size:8px;font-weight:700;color:${c.text};text-transform:uppercase;letter-spacing:.04em">⚠ ${c.label}</span>` : ''}
           </div>
           <div style="padding:5px 10px 7px">${items}</div>
         </div>

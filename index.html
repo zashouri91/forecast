@@ -1078,6 +1078,29 @@ function applyMappings() {
           rec._baseline = target.baseline;
         }
       }
+      // Fallback: when a row has no Site value, infer canonical site from the filename.
+      // This catches records like "Experience Center" rooms in ATL that have a blank Site column.
+      // Example: "PulsePoint@Atlanta Meetings (1) 2.xlsx" → extract "Atlanta" → resolve → Atlanta.
+      if (REF() && !rec._canonicalSite && !rec.site) {
+        if (!('_fileCanonicalSite' in f)) {
+          const m = name.match(/@(.+?)(?:\s+Meetings|\s+Space|\s+Report|\.xlsx)/i);
+          const hint = m ? m[1].trim() : null;
+          const r2 = hint ? resolveSiteValue(hint) : null;
+          f._fileCanonicalSite = r2 ? r2.site.siteName : null;
+        }
+        if (f._fileCanonicalSite) {
+          const target = REF().bySiteName[f._fileCanonicalSite.toLowerCase()];
+          if (target) {
+            rec._canonicalSite = target.siteName;
+            rec._buildingRefId = target.buildingRefId;
+            rec._state         = target.state;
+            rec._regionalLeader= target.regionalLeader;
+            rec._assignedCMs   = target.assignedCMs;
+            rec._capacity      = target.capacity;
+            rec._baseline      = target.baseline;
+          }
+        }
+      }
       // Hard scope: keep only records that resolved to one of the master reference sites.
       // Per spec, all tabs render against the 9 reference locations only.
       if (REF() && !rec._canonicalSite) {
@@ -1997,6 +2020,7 @@ function pct(n) {
 
 const TABS = [
   { id:'overview',  label:'Overview',                    scope:()=>true },
+  { id:'exec',      label:'Executive Summary',           scope:()=>true },
   { id:'workspace', label:'Workspace Reservations',      scope:r=>r._type==='space'||r._type==='traveler' },
   { id:'meetings',  label:'Meetings',                    scope:r=>r._type==='meeting' },
   { id:'events',    label:'Events',                      scope:r=>r._type==='event' },
@@ -2005,6 +2029,7 @@ const TABS = [
 // (user can press Clear Filters to reset).
 const TAB_FILTERS = {
   overview:  { site:1, status:0 },
+  exec:      { site:1, status:0 },
   workspace: { site:1, status:0 },
   meetings:  { site:1, status:0 },
   events:    { site:1, status:1 },
@@ -2051,8 +2076,8 @@ function renderDashboard() {
   const statuses=[...new Set(state.records.map(r=>r.status).filter(Boolean))].sort();
   const tabCounts = {};
   TABS.forEach(t => {
-    if (t.id === 'overview') {
-      // Show location count for Overview — total record count is jargony and unhelpful for execs
+    if (t.id === 'overview' || t.id === 'exec') {
+      // Show location count for Overview/Exec — total record count is jargony and unhelpful for execs
       tabCounts[t.id] = getAllSiteNames().length;
     } else {
       tabCounts[t.id] = state.records.filter(t.scope).length;
@@ -2209,7 +2234,7 @@ function setHeatmapMode(m) {
 function refreshDash() {
   Object.values(charts).forEach(c=>c&&c.destroy&&c.destroy()); charts={};
   const recs = getTabFiltered();
-  const fn = { overview: renderOverview, workspace: renderWorkspace, meetings: renderMeetings, events: renderEvents }[activeTab] || renderOverview;
+  const fn = { overview: renderOverview, exec: renderExecSummary, workspace: renderWorkspace, meetings: renderMeetings, events: renderEvents }[activeTab] || renderOverview;
   fn(recs);
   updateSubtitle();
   // tab counts in the strip reflect the *unfiltered* tab scope, so don't recompute here
@@ -2228,7 +2253,7 @@ function updateSubtitle() {
   const tab = TABS.find(t => t.id === activeTab) || TABS[0];
   const totalInTab = state.records.filter(tab.scope).length;
   const shown = getTabFiltered().length;
-  const noun = { overview:'activity', workspace:'reservation', meetings:'meeting', events:'event' }[activeTab] || 'activity';
+  const noun = { overview:'activity', exec:'activity', workspace:'reservation', meetings:'meeting', events:'event' }[activeTab] || 'activity';
   const pills = activeFilterPills();
   const baseText = totalInTab ? `Showing ${shown.toLocaleString()} of ${totalInTab.toLocaleString()} ${noun}${totalInTab===1?'':'s'} across ${getAllSiteNames().length} location${getAllSiteNames().length===1?'':'s'}` : `No ${noun}s found in this date range`;
   let pillsHtml = '';
@@ -2423,7 +2448,7 @@ function renderWeekAheadGrid(recs, stats) {
         if (cap > 0 && Object.keys(ivs).length > 0) {
           const totalOcc = Object.values(ivs).reduce((sum,iv)=>sum+unionMins(iv),0);
           const pct = Math.round(totalOcc / (cap * BIZ_TOTAL) * 100);
-          label = `${t}: ${pct}% of hrs (8a–5p)`;  // time-weighted, not reservation count
+          label = `${t}: ${pct}% occupied`;  // time-weighted avg occupancy, 8am–5pm
           if (pct>=80){color='#DC2626';fw='600';}
           else if (pct>=50){color='#92400E';fw='600';}
         } else if (cap > 0) {
@@ -2441,14 +2466,15 @@ function renderWeekAheadGrid(recs, stats) {
         hasAH = true;
         ahHtml += `<div style="display:flex;align-items:center;gap:4px;padding:1px 0">
           <span style="width:6px;height:6px;border-radius:2px;background:#C4B5FD;flex-shrink:0"></span>
-          <span style="font-size:${fsAH};color:#7C3AED">${escapeHtml(t)}: ${ahTxn} ${ahTxn===1?'reservation':'reservations'}</span>
+          <span style="font-size:${fsAH};color:#7C3AED">${escapeHtml(t)}: ${ahTxn} booking${ahTxn!==1?'s':''} (after hrs)</span>
         </div>`;
       }
     });
 
-    if (!hasAH) return bizHtml;
-    return bizHtml + `<div style="margin-top:3px;padding-top:2px;border-top:1px dashed #E2E8F0">
-      <div style="font-size:7px;font-weight:700;color:#94A3B8;letter-spacing:.04em;text-transform:uppercase;margin-bottom:1px">After Hours</div>
+    const header = `<div style="font-size:${small?'7px':'7.5px'};font-weight:700;color:#94A3B8;letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px">Space Occ · avg 8am–5pm</div>`;
+    if (!hasAH) return header + bizHtml;
+    return header + bizHtml + `<div style="margin-top:3px;padding-top:2px;border-top:1px dashed #E2E8F0">
+      <div style="font-size:7px;font-weight:700;color:#7C3AED;letter-spacing:.04em;text-transform:uppercase;margin-bottom:1px">After Hours bookings</div>
       ${ahHtml}</div>`;
   }
 
@@ -2598,7 +2624,7 @@ function renderWeekAheadGrid(recs, stats) {
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#EC4899;display:inline-block"></span><span style="font-size:10px;color:#64748B">Event</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block"></span><span style="font-size:10px;color:#64748B">Traveler</span></div>
       <div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:#92400E;font-weight:700">★</span><span style="font-size:10px;color:#64748B">Supervisor</span></div>
-      <div style="display:flex;align-items:center;gap:4px;border-left:1px solid #E2E8F0;padding-left:12px"><span style="font-size:10px;color:#94A3B8">Space: time-weighted occupancy % (8am–5pm) · <span style="color:#7C3AED;font-weight:600">■ After Hours</span> = bookings outside that window</span></div>
+      <div style="display:flex;align-items:center;gap:4px;border-left:1px solid #E2E8F0;padding-left:12px"><span style="font-size:10px;color:#94A3B8">Space <b>% occupied</b> = avg share of rooms/desks in use during business hours (8am–5pm) · <span style="color:#7C3AED;font-weight:600">■ After Hours</span> = # bookings outside that window</span></div>
     </div>
   </div>`;
 
@@ -2767,7 +2793,7 @@ function exportWeekAheadPDF() {
             if (cap > 0 && Object.keys(ivs).length > 0) {
               const totalOcc = Object.values(ivs).reduce((sum,iv)=>sum+pdfUnionMins(iv),0);
               const pct = Math.round(totalOcc / (cap * BIZ_TOTAL) * 100);
-              label = `${t}: ${pct}% of hrs`;  // time-weighted
+              label = `${t}: ${pct}% occ`;  // time-weighted avg occupancy 8am–5pm
               if(pct>=80){color='#DC2626';fw='600';}else if(pct>=50){color='#92400E';fw='600';}
             } else if (cap > 0) {
               label = `${t}: ${bizTxn}/${cap}`;
@@ -2778,11 +2804,11 @@ function exportWeekAheadPDF() {
           }
           if (ahTxn > 0) {
             hasAH = true;
-            ahLines += `<div style="font-size:7.5px;color:#7C3AED;line-height:1.5">${escapeHtml(t)}: ${ahTxn} ${ahTxn===1?'reservation':'reservations'}</div>`;
+            ahLines += `<div style="font-size:7.5px;color:#7C3AED;line-height:1.5">${escapeHtml(t)}: ${ahTxn} booking${ahTxn===1?'':'s'} (after hrs)</div>`;
           }
         });
-        let spaceBlock = spaceLines;
-        if (hasAH) spaceBlock += `<div style="margin-top:2px;border-top:1px dashed #e2e8f0;padding-top:2px"><div style="font-size:6.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">After Hours</div>${ahLines}</div>`;
+        let spaceBlock = `<div style="font-size:6.5px;font-weight:700;color:#94a3b8;letter-spacing:.05em;text-transform:uppercase;margin-bottom:1px">Space Occ · avg 8am–5pm</div>` + spaceLines;
+        if (hasAH) spaceBlock += `<div style="margin-top:2px;border-top:1px dashed #e2e8f0;padding-top:2px"><div style="font-size:6.5px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.04em">After Hours bookings</div>${ahLines}</div>`;
         items += `<div style="margin-top:4px;padding-top:4px;border-top:1px dashed #e2e8f0">${spaceBlock}</div>`;
       }
 
@@ -3050,7 +3076,7 @@ function exportWeekAheadPDF() {
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#EC4899;display:inline-block"></span>Event</span>
             <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:7px;height:7px;border-radius:50%;background:#10B981;display:inline-block"></span>Traveler</span>
             <span style="width:1px;height:14px;background:#e2e8f0;display:inline-block"></span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Space: time-weighted occ % (8a–5p) &nbsp;·&nbsp; <span style="color:#7C3AED;font-weight:600">■</span> After Hours = # reservations outside 8am–5pm</span>
+            <span style="display:flex;align-items:center;gap:4px;font-size:8px;color:#64748b"><span style="width:8px;height:8px;border-radius:2px;background:#e2e8f0;display:inline-block"></span>Space <b>% occupied</b> = avg share of rooms/desks in use (8am–5pm) &nbsp;·&nbsp; <span style="color:#7C3AED;font-weight:600">■ After Hours</span> = # bookings outside that window</span>
           </div>
         </th>
       </tr>
@@ -3066,7 +3092,7 @@ function exportWeekAheadPDF() {
     <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="dot" style="background:#3B82F6"></span>Meeting</div>
     <div class="li"><span class="dot" style="background:#EC4899"></span>Event</div>
     <div class="li"><span class="dot" style="background:#10B981"></span>Traveler</div>
-    <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Space: time-weighted occupancy % (8am–5pm)</div>
+    <div class="li" style="border-left:1px solid #e2e8f0;padding-left:10px"><span class="sq" style="background:#e2e8f0"></span>Space <b>% occupied</b> = avg share of rooms/desks in use during business hours (8am–5pm)</div>
     <div class="li"><span class="sq" style="background:#EDE9FE;border-left:2px solid #7C3AED"></span><span style="color:#7C3AED;font-weight:600">After Hours</span> — bookings outside 8am–5pm window</div>
   </div>
 
@@ -3098,6 +3124,252 @@ window.onload = function() {
   const blob = new Blob([pdfHtml], { type: 'text/html' });
   const url  = URL.createObjectURL(blob);
   window.open(url, '_blank');
+}
+
+// ── EXECUTIVE SUMMARY TAB ──────────────────────────────────────────────────
+function renderExecSummary(recs) {
+  const allRecs = recs;
+  const locations = REF()
+    ? REF().sites.map(s => s.siteName).filter(s => allRecs.some(r => (r._canonicalSite||r.site) === s))
+    : [...new Set(allRecs.map(r => r._canonicalSite||r.site).filter(Boolean))].sort();
+
+  // Collect all unique dates in the filtered window
+  const allDates = [...new Set(allRecs.map(r => r.date).filter(Boolean))].sort();
+
+  // Build per-site per-day stats
+  const siteDayData = {}; // { site: { date: { mtg, att, vips, travelers, events, space, flag } } }
+  const siteTotals  = {}; // { site: { mtg, att, vips, travelers, events, space, redDays, amberDays } }
+  const dayTotals   = {}; // { date: { mtg, att, vips, travelers, events, space } }
+
+  locations.forEach(loc => {
+    siteDayData[loc] = {};
+    siteTotals[loc]  = { mtg:0, att:0, vips:0, travelers:0, events:0, space:0, redDays:0, amberDays:0 };
+  });
+
+  allRecs.forEach(r => {
+    const loc  = r._canonicalSite || r.site;
+    const date = r.date;
+    if (!loc || !date || !siteDayData[loc]) return;
+    if (!siteDayData[loc][date]) siteDayData[loc][date] = { mtg:0, att:0, vips:0, travelers:0, events:0, space:0 };
+    if (!dayTotals[date])        dayTotals[date]        = { mtg:0, att:0, vips:0, travelers:0, events:0, space:0 };
+
+    const isCancel = isCanceled(r);
+    if (r._type === 'meeting' && !isCancel) {
+      siteDayData[loc][date].mtg++;
+      siteDayData[loc][date].att += (r.attendees||0);
+      if (hasVip(r)) siteDayData[loc][date].vips++;
+      siteTotals[loc].mtg++;
+      siteTotals[loc].att += (r.attendees||0);
+      if (hasVip(r)) siteTotals[loc].vips++;
+      dayTotals[date].mtg++;
+      dayTotals[date].att += (r.attendees||0);
+      if (hasVip(r)) dayTotals[date].vips++;
+    } else if (r._type === 'traveler') {
+      siteDayData[loc][date].travelers++;
+      siteTotals[loc].travelers++;
+      dayTotals[date].travelers++;
+    } else if (r._type === 'event' && !isCancel) {
+      siteDayData[loc][date].events++;
+      siteTotals[loc].events++;
+      dayTotals[date].events++;
+    } else if (r._type === 'space') {
+      siteDayData[loc][date].space++;
+      siteTotals[loc].space++;
+      dayTotals[date].space++;
+    }
+  });
+
+  // Flag each site-day and tally red/amber days
+  locations.forEach(loc => {
+    allDates.forEach(date => {
+      const flag = coverageFlag(loc, date);
+      if (flag === 'red')   siteTotals[loc].redDays++;
+      else if (flag === 'amber') siteTotals[loc].amberDays++;
+      if (!siteDayData[loc][date]) siteDayData[loc][date] = { mtg:0, att:0, vips:0, travelers:0, events:0, space:0 };
+      siteDayData[loc][date].flag = flag;
+    });
+  });
+
+  // Grand totals
+  const grand = { mtg:0, att:0, vips:0, travelers:0, events:0, space:0 };
+  locations.forEach(loc => {
+    grand.mtg       += siteTotals[loc].mtg;
+    grand.att       += siteTotals[loc].att;
+    grand.vips      += siteTotals[loc].vips;
+    grand.travelers += siteTotals[loc].travelers;
+    grand.events    += siteTotals[loc].events;
+    grand.space     += siteTotals[loc].space;
+  });
+
+  // Format dates as short day labels
+  function dayLabel(d) {
+    const dt = new Date(d + 'T12:00:00');
+    const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
+    return `${dow} ${dt.getMonth()+1}/${dt.getDate()}`;
+  }
+
+  function cellBg(flag) {
+    if (flag === 'red')   return 'background:#FEF2F2';
+    if (flag === 'amber') return 'background:#FFFBEB';
+    return '';
+  }
+
+  function flagDot(flag) {
+    if (flag === 'red')   return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#EF4444;margin-right:3px;vertical-align:middle"></span>';
+    if (flag === 'amber') return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#F59E0B;margin-right:3px;vertical-align:middle"></span>';
+    return '';
+  }
+
+  // KPI cards
+  const kpiHtml = `
+    <div class="summary-grid" style="grid-template-columns:repeat(6,1fr);margin-bottom:20px">
+      <div class="summary-card" data-tone="indigo">
+        <div class="summary-label">Meetings</div>
+        <div class="summary-value">${grand.mtg.toLocaleString()}</div>
+        <div class="summary-sub">across ${locations.length} sites</div>
+      </div>
+      <div class="summary-card" data-tone="teal">
+        <div class="summary-label">Attendees</div>
+        <div class="summary-value">${grand.att.toLocaleString()}</div>
+        <div class="summary-sub">total headcount</div>
+      </div>
+      <div class="summary-card" data-tone="amber">
+        <div class="summary-label">VIP Meetings</div>
+        <div class="summary-value">${grand.vips.toLocaleString()}</div>
+        <div class="summary-sub">requiring white-glove</div>
+      </div>
+      <div class="summary-card" data-tone="emerald">
+        <div class="summary-label">Travelers</div>
+        <div class="summary-value">${grand.travelers.toLocaleString()}</div>
+        <div class="summary-sub">visiting staff</div>
+      </div>
+      <div class="summary-card" data-tone="rose">
+        <div class="summary-label">Events</div>
+        <div class="summary-value">${grand.events.toLocaleString()}</div>
+        <div class="summary-sub">planned events</div>
+      </div>
+      <div class="summary-card" data-tone="indigo" style="--card-color:#7C3AED">
+        <div class="summary-label">Space Reservations</div>
+        <div class="summary-value">${grand.space.toLocaleString()}</div>
+        <div class="summary-sub">desk &amp; room bookings</div>
+      </div>
+    </div>`;
+
+  // Site × Day table
+  // Columns: Site | <day1> | <day2> | ... | Weekly Total
+  const maxDays = 14; // cap to keep table readable; show first N days in window
+  const visibleDates = allDates.slice(0, maxDays);
+
+  const thStyle = 'padding:7px 10px;font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.05em;background:#F8FAFC;border-bottom:2px solid #E2E8F0;white-space:nowrap;text-align:center';
+  const thSiteStyle = 'padding:7px 12px;font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.05em;background:#F8FAFC;border-bottom:2px solid #E2E8F0;text-align:left';
+  const thTotalStyle = 'padding:7px 12px;font-size:10px;font-weight:700;color:#4338CA;text-transform:uppercase;letter-spacing:.05em;background:#EEF2FF;border-bottom:2px solid #C7D2FE;text-align:center';
+
+  let tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead>
+      <tr>
+        <th style="${thSiteStyle}">Site</th>
+        ${visibleDates.map(d => `<th style="${thStyle}">${dayLabel(d)}</th>`).join('')}
+        <th style="${thTotalStyle}">Period Total</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  locations.forEach((loc, li) => {
+    const totals = siteTotals[loc];
+    const rowBg = li % 2 === 0 ? '#FFFFFF' : '#FAFAFA';
+    const tdBase = `padding:8px 10px;vertical-align:top;border-bottom:1px solid #F1F5F9;text-align:center`;
+
+    const dayCells = visibleDates.map(date => {
+      const d = siteDayData[loc][date] || {};
+      const flag = d.flag || 'normal';
+      const bg = cellBg(flag);
+      const lines = [];
+      if (d.mtg)       lines.push(`<div style="color:#3B82F6;font-weight:600">${d.mtg} mtg${d.mtg!==1?'s':''}</div>`);
+      if (d.att)       lines.push(`<div style="color:#475569;font-size:10px">${d.att.toLocaleString()} ppl</div>`);
+      if (d.vips)      lines.push(`<div style="color:#F59E0B;font-size:10px;font-weight:600">★ ${d.vips} VIP</div>`);
+      if (d.travelers) lines.push(`<div style="color:#10B981;font-size:10px">${d.travelers} traveler${d.travelers!==1?'s':''}</div>`);
+      if (d.events)    lines.push(`<div style="color:#EC4899;font-size:10px">${d.events} event${d.events!==1?'s':''}</div>`);
+      if (d.space)     lines.push(`<div style="color:#7C3AED;font-size:10px">${d.space} space</div>`);
+      if (!lines.length) lines.push('<div style="color:#CBD5E1;font-size:10px">—</div>');
+      return `<td style="${tdBase};${bg};background:${bg?bg.replace('background:',''):rowBg}">${flagDot(flag)}${lines.join('')}</td>`;
+    }).join('');
+
+    // Weekly total cell
+    const redAmberBadges = [];
+    if (totals.redDays)   redAmberBadges.push(`<span style="display:inline-block;background:#FEE2E2;color:#DC2626;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">🔴 ${totals.redDays}d</span>`);
+    if (totals.amberDays) redAmberBadges.push(`<span style="display:inline-block;background:#FEF3C7;color:#92400E;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">🟡 ${totals.amberDays}d</span>`);
+
+    tableHtml += `<tr style="background:${rowBg}">
+      <td style="padding:8px 12px;border-bottom:1px solid #F1F5F9;font-weight:700;color:#1E293B;white-space:nowrap">
+        ${escapeHtml(loc)}
+        ${redAmberBadges.length ? '<div style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap">' + redAmberBadges.join('') + '</div>' : ''}
+      </td>
+      ${dayCells}
+      <td style="padding:8px 12px;border-bottom:1px solid #F1F5F9;background:#EEF2FF;text-align:center;vertical-align:top">
+        ${totals.mtg       ? '<div style="color:#3B82F6;font-weight:600">' + totals.mtg.toLocaleString() + ' mtgs</div>' : ''}
+        ${totals.att       ? '<div style="color:#475569;font-size:11px">' + totals.att.toLocaleString() + ' ppl</div>' : ''}
+        ${totals.vips      ? '<div style="color:#F59E0B;font-size:11px;font-weight:600">★ ' + totals.vips + ' VIP</div>' : ''}
+        ${totals.travelers ? '<div style="color:#10B981;font-size:11px">' + totals.travelers + ' travelers</div>' : ''}
+        ${totals.events    ? '<div style="color:#EC4899;font-size:11px">' + totals.events + ' events</div>' : ''}
+        ${totals.space     ? '<div style="color:#7C3AED;font-size:11px">' + totals.space + ' space</div>' : ''}
+        ${!totals.mtg && !totals.travelers && !totals.events && !totals.space ? '<div style="color:#CBD5E1">—</div>' : ''}
+      </td>
+    </tr>`;
+  });
+
+  // Day totals footer row
+  const footerCells = visibleDates.map(date => {
+    const d = dayTotals[date] || {};
+    return `<td style="padding:6px 10px;background:#F8FAFC;border-top:2px solid #E2E8F0;text-align:center;font-size:10px">
+      ${d.mtg       ? '<div style="color:#3B82F6;font-weight:600">' + d.mtg + '</div>' : ''}
+      ${d.att       ? '<div style="color:#475569">' + d.att.toLocaleString() + ' ppl</div>' : ''}
+      ${d.travelers ? '<div style="color:#10B981">' + d.travelers + ' trvl</div>' : ''}
+      ${d.events    ? '<div style="color:#EC4899">' + d.events + ' evt</div>' : ''}
+    </td>`;
+  }).join('');
+
+  tableHtml += `<tr>
+    <td style="padding:6px 12px;background:#F8FAFC;border-top:2px solid #E2E8F0;font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.04em">Daily Totals</td>
+    ${footerCells}
+    <td style="padding:6px 12px;background:#EEF2FF;border-top:2px solid #C7D2FE;font-size:11px;font-weight:700;color:#4338CA;text-align:center">
+      ${grand.mtg} mtgs · ${grand.att.toLocaleString()} ppl
+    </td>
+  </tr>`;
+
+  tableHtml += '</tbody></table>';
+
+  const truncNote = allDates.length > maxDays
+    ? `<div style="font-size:11px;color:#94A3B8;margin-top:8px;text-align:right">Showing first ${maxDays} of ${allDates.length} days. Narrow date range to see more days in detail.</div>`
+    : '';
+
+  // Legend
+  const legendHtml = `
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:10px 0 0">
+      <span style="font-size:11px;font-weight:600;color:#475569">Legend:</span>
+      <span style="font-size:11px;color:#3B82F6">■ Mtgs = meetings</span>
+      <span style="font-size:11px;color:#F59E0B">★ VIP = VIP meeting</span>
+      <span style="font-size:11px;color:#10B981">■ Travelers = visiting staff</span>
+      <span style="font-size:11px;color:#EC4899">■ Events = planned events</span>
+      <span style="font-size:11px;color:#7C3AED">■ Space = desk/room reservations</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px"><span style="width:8px;height:8px;border-radius:50%;background:#EF4444;display:inline-block"></span>Red = understaffed day</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block"></span>Amber = coverage gap</span>
+    </div>`;
+
+  document.getElementById('tab-panel').innerHTML = `
+    ${kpiHtml}
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Site Activity Summary</div>
+          <div class="text-muted" style="margin-top:2px">Weekly and daily totals by location across all activity types</div>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        ${tableHtml}
+        ${truncNote}
+        <div style="padding:0 16px 12px">${legendHtml}</div>
+      </div>
+    </div>`;
 }
 
 function renderOverview(recs) {

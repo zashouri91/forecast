@@ -532,6 +532,8 @@ const STANDARD_FIELDS = [
   {key:'status',label:'Status',required:false},
   {key:'attendees',label:'# Attendees',required:false},
   {key:'vip',label:'VIP / VIP Attendee',required:false},
+  {key:'slt',label:'SLT / Execs Present',required:false},
+  {key:'level',label:'Manager Level',required:false},
   {key:'budget',label:'Budget / Event Spend',required:false},
   {key:'cm_captain',label:'CM Captain / Lead',required:false},
   {key:'time',label:'Time',required:false},
@@ -554,6 +556,8 @@ const FIELD_ALIASES = {
   attendees:['# guest','number of attendees','# attendees','num attendees','number of guests','headcount','expected attendees','attendees','event attendance total','event attendance','attendance total','total attendance','rsvps'],
   // added 'vip/meeting host' and 'vp/meeting host' for Mason and similar files
   vip:['vip','vips','vip attendee','vip attendees','vip name','vip names','executive','exec attendee','exec attending','principal','principals','vip/meeting host','vp/meeting host','slt/executives in attendance','slt in attendance','executives in attendance','slt attendees'],
+  slt:['are there slt in this meeting?','are there slt in this meeting','slt in this meeting'],
+  level:['manager level','position_level','position level','mgr level','job level'],
   budget:['budget','event budget','event spend','total spend','estimated spend','estimated cost','total cost','event cost','planned spend','approved budget','total est event budget','total estimated event budget','total estimated budget','est event budget'],
   cm_captain:['cm captain','cm event lead','event team member','event lead','cm lead','cm owner'],
   time:['time','event time','meeting time','start time'],
@@ -578,6 +582,16 @@ const RECORD_TYPES = [
 // pre-populated filter chips, anomaly flags. See scripts/bake-reference.mjs.
 const REF = () => window.CM_REFERENCE;
 
+// Known nicknames that don't fuzzy-match their canonical reference site.
+// Keys are lowercased with punctuation collapsed to single spaces.
+const SITE_ALIASES = {
+  'willis tower': 'chicago',
+  'willistower': 'chicago',
+  'chicago willis tower': 'chicago',
+  'penn1': 'ny penn1',
+  'penn 1': 'ny penn1',
+};
+
 function resolveSiteValue(raw) {
   const ref = REF();
   if (!ref || raw == null) return null;
@@ -585,6 +599,9 @@ function resolveSiteValue(raw) {
   if (!v) return null;
   const vl = v.toLowerCase();
   const vu = v.toUpperCase();
+  const aliasKey = vl.replace(/[^a-z0-9]+/g, ' ').trim();
+  const aliasHit = SITE_ALIASES[aliasKey] || SITE_ALIASES[aliasKey.replace(/ /g, '')];
+  if (aliasHit && ref.bySiteName[aliasHit]) return { site: ref.bySiteName[aliasHit], score: 95, via: 'alias' };
   if (ref.bySpacesLocationId && ref.bySpacesLocationId[v]) return { site: ref.bySpacesLocationId[v], score: 100, via: 'spacesLocationId' };
   if (ref.bySiteName[vl]) return { site: ref.bySiteName[vl], score: 100, via: 'siteName' };
   if (ref.byLocationUpper[vu]) return { site: ref.byLocationUpper[vu], score: 100, via: 'location' };
@@ -749,13 +766,28 @@ function parseXLSX(name, buffer) {
 }
 
 function parseCSV(name, text) {
-  const lines = text.trim().split('\n');
-  const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
-  const rows = lines.slice(1).map(line=>{
-    const cells=[]; let cur='',inQ=false;
-    for(const ch of line){ if(ch==='"')inQ=!inQ; else if(ch===','&&!inQ){cells.push(cur.trim());cur='';}else cur+=ch; }
-    cells.push(cur.trim()); return cells;
-  }).filter(r=>r.some(c=>c!==''));
+  // Full character-scan parser: handles CRLF line endings, quoted fields
+  // containing commas/newlines, and RFC-4180 escaped quotes ("").
+  const table=[]; let row=[], cur='', inQ=false;
+  const s=String(text);
+  for (let i=0;i<s.length;i++){
+    const ch=s[i];
+    if (inQ) {
+      if (ch==='"') { if (s[i+1]==='"'){cur+='"';i++;} else inQ=false; }
+      else cur+=ch;
+    } else if (ch==='"') inQ=true;
+    else if (ch===',') { row.push(cur.trim()); cur=''; }
+    else if (ch==='\n'||ch==='\r') {
+      if (ch==='\r'&&s[i+1]==='\n') i++;
+      row.push(cur.trim()); cur='';
+      if (row.some(c=>c!=='')) table.push(row);
+      row=[];
+    } else cur+=ch;
+  }
+  row.push(cur.trim());
+  if (row.some(c=>c!=='')) table.push(row);
+  const headers = (table[0]||[]).map(h=>h.replace(/"/g,'').trim());
+  const rows = table.slice(1);
   const recordType = name.toLowerCase().includes('traveler')?'traveler':'meeting';
   return {name,type:'csv',sheets:[name],selectedSheet:name,columns:headers,rows:[headers,...rows],mappings:autoMap(headers),recordType,rowCount:rows.length};
 }
@@ -775,6 +807,14 @@ const PREFERRED_ALIASES = {
   budget: new Set(['total est event budget', 'total estimated budget', 'estimated budget', 'planned budget']),
 };
 
+// Columns that must NEVER map to a given field, even when a substring alias matches.
+// e.g. the binder 'Event' column is a TRUE/blank flag (this meeting is an event),
+// not a budget — but 'event budget'.includes('event') used to map it to budget.
+const NEGATIVE_ALIASES = {
+  budget: new Set(['event']),
+  event_type: new Set(['attendee type']),
+};
+
 function autoMap(columns) {
   const mappings={}, usedFields=new Set();
   const pairs=[];
@@ -782,6 +822,7 @@ function autoMap(columns) {
     if(!col) return;
     const cl=col.toLowerCase().trim();
     Object.entries(FIELD_ALIASES).forEach(([field,aliases])=>{
+      const neg=NEGATIVE_ALIASES[field]; if(neg&&neg.has(cl)) return;
       let score=0;
       const preferred = PREFERRED_ALIASES[field];
       aliases.forEach(a=>{
@@ -1025,6 +1066,8 @@ function applyMappings() {
   state.records=[];
   state.filteredOutCount = 0;
   state.filteredOutBySource = {};
+  state.skipStats = { unresolvedSite:{}, statusExcluded:0, weekend:0, exactDupes:0, eventDupes:0, dateAnomalies:[] };
+  state.fileKeepStats = {};
   state.files.forEach(f=>{
     const {rows,columns,mappings,name,recordType}=f;
     const fi2idx={};
@@ -1032,6 +1075,12 @@ function applyMappings() {
     // ensure site resolution map is current for this file
     if (REF() && fi2idx.site !== undefined) buildSiteResolution(f);
     const resolution = f._siteResolution || new Map();
+    // Binder 'Event' flag column: marks a meeting row as an actual event (weighted accordingly).
+    const eventFlagIdx = columns.findIndex(c => c && /^event$/i.test(String(c).trim()));
+    // Dual-purpose "VIP/Meeting Host" columns hold the host's name on most rows —
+    // flag the source so hasVip() can require corroboration.
+    const vipCol = Object.keys(mappings||{}).find(c => mappings[c] === 'vip');
+    const vipIsHostCol = !!(vipCol && /host/i.test(vipCol));
     // Detect first/last name pair so we can render "First Last" as a single name.
     let firstNameIdx=null, lastNameIdx=null;
     columns.forEach((c,i)=>{
@@ -1063,7 +1112,18 @@ function applyMappings() {
           rec.event_name = `${String(fn).trim()} ${String(ln).trim()}`;
         }
       }
+      if (vipIsHostCol) rec._vipFromHostCol = true;
+      if (eventFlagIdx >= 0 && recordType === 'meeting') {
+        const ev = row[eventFlagIdx];
+        if (ev != null && /^(true|yes|1)$/i.test(String(ev).trim())) rec._isEventFlag = true;
+      }
       if(!rec.date&&!rec.event_name) return;
+      // Data quality: dates far outside a plausible window are almost always typos
+      // (we've seen 2010, 2015 and 2036 in real binders). Skip + surface them.
+      if (rec.date && (rec.date < '2020-01-01' || rec.date > addDays(todayStr(), 550))) {
+        state.skipStats.dateAnomalies.push({ source: name, date: rec.date, name: String(rec.event_name || '') });
+        return;
+      }
       // enrich with reference data using the (possibly user-overridden) resolution
       if (REF() && rec.site) {
         const r = resolution.get(rec.site);
@@ -1078,10 +1138,10 @@ function applyMappings() {
           rec._baseline = target.baseline;
         }
       }
-      // Fallback: when a row has no Site value, infer canonical site from the filename.
-      // This catches records like "Experience Center" rooms in ATL that have a blank Site column.
-      // Example: "PulsePoint@Atlanta Meetings (1) 2.xlsx" → extract "Atlanta" → resolve → Atlanta.
-      if (REF() && !rec._canonicalSite && !rec.site) {
+      // Fallback: when a row's Site value is blank OR didn't resolve, infer the
+      // canonical site from the filename. Catches blank-site rows (ATL Experience
+      // Center) AND whole files whose Site value is a nickname (e.g. "Willis Tower").
+      if (REF() && !rec._canonicalSite) {
         if (!('_fileCanonicalSite' in f)) {
           const m = name.match(/@(.+?)(?:\s+Meetings|\s+Space|\s+Report|\.xlsx)/i);
           const hint = m ? m[1].trim() : null;
@@ -1106,12 +1166,13 @@ function applyMappings() {
       if (REF() && !rec._canonicalSite) {
         state.filteredOutCount++;
         state.filteredOutBySource[name] = (state.filteredOutBySource[name]||0) + 1;
+        state.skipStats.unresolvedSite[name] = (state.skipStats.unresolvedSite[name]||0) + 1;
         return;
       }
       // Exclude weekends — CM operations are Mon–Fri only.
       if (rec.date) {
         const dow = new Date(rec.date + 'T12:00:00').getDay();
-        if (dow === 0 || dow === 6) return; // 0=Sunday, 6=Saturday
+        if (dow === 0 || dow === 6) { state.skipStats.weekend++; return; } // 0=Sunday, 6=Saturday
       }
       // For space reservations, only keep confirmed/reserved statuses.
       // Cancelled, pending, waitlisted, etc. should not count toward load or table totals.
@@ -1120,6 +1181,7 @@ function applyMappings() {
         if (!sl.includes('confirm') && !sl.includes('reserv')) {
           state.filteredOutCount++;
           state.filteredOutBySource[name] = (state.filteredOutBySource[name]||0) + 1;
+          state.skipStats.statusExcluded++;
           return;
         }
       }
@@ -1139,6 +1201,41 @@ function applyMappings() {
       state.records.push(rec);
     });
   });
+
+  // Pass 2: drop exact duplicate rows (same source, type, site, day, name, room, time slot).
+  const seenKeys = new Set();
+  state.records = state.records.filter(r => {
+    if (!r.date || !r.event_name) return true;
+    const k = [r._source, r._type, r._canonicalSite || r.site, r.date,
+               String(r.event_name).toLowerCase().trim(), r.room, r.time, r._startMin ?? ''].join('|');
+    if (seenKeys.has(k)) { state.skipStats.exactDupes++; return false; }
+    seenKeys.add(k);
+    return true;
+  });
+
+  // Pass 3: merge binder meeting rows that duplicate an approved/executed event on the
+  // same site + day (fuzzy name match). The event record (higher weight) wins, so the
+  // same activity is never counted as both an event AND a meeting.
+  const evIdx = {};
+  state.records.forEach(r => {
+    if (r._type !== 'event' || !r.date) return;
+    const k = (r._canonicalSite || r.site) + '|' + r.date;
+    (evIdx[k] = evIdx[k] || []).push(String(r.event_name || '').toLowerCase().trim());
+  });
+  state.records = state.records.filter(r => {
+    if (r._type !== 'meeting' || !r.date) return true;
+    const names = evIdx[(r._canonicalSite || r.site) + '|' + r.date];
+    if (!names) return true;
+    const b = String(r.event_name || '').toLowerCase().trim();
+    if (b.length < 6) return true;
+    const dup = names.some(a => a.length >= 6 && (a.includes(b.slice(0, 8)) || b.includes(a.slice(0, 8))));
+    if (dup) { state.skipStats.eventDupes++; return false; }
+    return true;
+  });
+
+  // Per-file keep stats — drives the "file mostly dropped" warning in the UI.
+  state.files.forEach(f => { state.fileKeepStats[f.name] = { total: f.rowCount, kept: 0 }; });
+  state.records.forEach(r => { if (state.fileKeepStats[r._source]) state.fileKeepStats[r._source].kept++; });
 }
 
 // ── VALIDATION STEP ────────────────────────────────────────────────────────
@@ -1537,6 +1634,52 @@ function parseOverlay(wb) {
   return overlay;
 }
 
+// ── DATA HEALTH ────────────────────────────────────────────────────────────
+// One glanceable card: what was kept, what was skipped and why, and loud
+// warnings when an entire file failed to resolve (e.g. unmapped site names).
+function dataHealthHtml() {
+  const ss = state.skipStats || {};
+  const keep = state.fileKeepStats || {};
+  const kept = state.records.length;
+
+  // Files where almost everything was dropped — usually a site-mapping problem.
+  const lowKeep = Object.entries(keep)
+    .filter(([n, s]) => s.total > 10 && s.kept < s.total * 0.1)
+    .map(([n, s]) => ({ name: n, ...s }));
+
+  const unresolvedTotal = Object.values(ss.unresolvedSite || {}).reduce((a, b) => a + b, 0);
+  const unresolvedDetail = Object.entries(ss.unresolvedSite || {})
+    .sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([n, c]) => `${escapeHtml(n)}: ${c.toLocaleString()}`).join(' · ');
+
+  const anomalies = ss.dateAnomalies || [];
+  const stat = (label, val, tone) => `<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:10px 14px;min-width:120px">
+    <div style="font-size:20px;font-weight:700;color:${tone || '#1E293B'}">${val.toLocaleString()}</div>
+    <div style="font-size:11px;color:#64748B;margin-top:2px">${label}</div>
+  </div>`;
+
+  return `<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px 18px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:#1E293B">Data Health</div>
+      <div style="font-size:11px;color:#94A3B8">recomputed on every upload</div>
+    </div>
+    ${lowKeep.length ? lowKeep.map(f => `<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#991B1B">
+      <b>&#9888; ${escapeHtml(f.name)}</b>: only ${f.kept} of ${f.total.toLocaleString()} rows were kept. Check the Site column mapping for this file — its location may not match a reference site.
+    </div>`).join('') : ''}
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      ${stat('records kept', kept, '#047857')}
+      ${stat('unmatched location', unresolvedTotal, unresolvedTotal ? '#B45309' : undefined)}
+      ${stat('excluded status', ss.statusExcluded || 0)}
+      ${stat('weekend rows', ss.weekend || 0)}
+      ${stat('exact duplicates', ss.exactDupes || 0, ss.exactDupes ? '#B45309' : undefined)}
+      ${stat('event double-counts merged', ss.eventDupes || 0)}
+      ${stat('implausible dates', anomalies.length, anomalies.length ? '#B91C1C' : undefined)}
+    </div>
+    ${unresolvedTotal ? `<div style="font-size:11px;color:#94A3B8;margin-top:8px">Unmatched locations by file — ${unresolvedDetail}. Rows from buildings outside the reference sites are expected to be skipped.</div>` : ''}
+    ${anomalies.length ? `<div style="font-size:11px;color:#B91C1C;margin-top:6px">Skipped dates: ${anomalies.slice(0, 6).map(a => `${a.date} (${escapeHtml(String(a.name).slice(0, 24) || a.source)})`).join(' · ')}${anomalies.length > 6 ? ` +${anomalies.length - 6} more` : ''}</div>` : ''}
+  </div>`;
+}
+
 function renderValidationStep() {
   const { today, end } = getValidationWindow();
   // Get records within window — skip PulsePoint Space Report records (space/desk
@@ -1698,6 +1841,7 @@ function renderValidationStep() {
     : [];
 
   document.getElementById('validate-content').innerHTML = `
+    ${dataHealthHtml()}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;flex-wrap:wrap;gap:14px">
       <div>
         <div class="section-title">Validate &amp; Clean</div>
@@ -1806,6 +1950,11 @@ const MODEL_DEFAULTS = {
 
   // Override sensitivity
   vipTrigger: 4,
+
+  // VIP counting: 0 = strict (host-name columns need SLT/title corroboration), 1 = legacy (any name counts)
+  hostNamesAreVips: 0,
+  // Minimum traveler "Manager Level" that counts toward CM load (travelers without level data always count)
+  travVpMinLevel: 25,
 };
 
 let MODEL = loadModel();
@@ -1843,6 +1992,8 @@ function setModel(key, val) {
   MODEL.thrElevated = Math.max(0.2, Math.min(0.95, Number(MODEL.thrElevated)));
   MODEL.thrHigh = Math.max(MODEL.thrElevated + 0.01, Math.min(2.0, Number(MODEL.thrHigh)));
   MODEL.vipTrigger = Math.max(1, Math.min(10, Math.round(Number(MODEL.vipTrigger))));
+  MODEL.hostNamesAreVips = MODEL.hostNamesAreVips ? 1 : 0;
+  MODEL.travVpMinLevel = Math.max(0, Math.min(50, Number(MODEL.travVpMinLevel ?? MODEL_DEFAULTS.travVpMinLevel)));
 
   // Keep weights sensible
   ['wMeeting','wEvent','wVip','wCatering','wTraveler'].forEach(k => {
@@ -1870,6 +2021,12 @@ function dailyCapacity(siteName) {
   return eff * MODEL.meetingEqPerDay;
 }
 
+function travelerIsVpPlus(r) {
+  const lv = parseFloat(r.level);
+  if (Number.isNaN(lv)) return true; // no level data — count it (legacy behavior)
+  return lv >= MODEL.travVpMinLevel;
+}
+
 function hasCatering(r) {
   const v = (r.catering || '').toString().trim();
   if (!v) return false;
@@ -1882,6 +2039,11 @@ function siteKey(r) {
 
 function buildSiteDayStats(records) {
   const stats = {};
+  const dateAdd = (s, n) => {
+    const d = new Date(s + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    return fmtDate(d.toISOString());
+  };
   const add = (site, date) => {
     stats[site] = stats[site] || {};
     stats[site][date] = stats[site][date] || {
@@ -1892,6 +2054,7 @@ function buildSiteDayStats(records) {
       vip: 0,
       attendees: 0,
       catering: 0,
+      cancelled: 0,
       load: 0,
       capacity: 0,
       util: 0,
@@ -1905,10 +2068,33 @@ function buildSiteDayStats(records) {
     if (!d) return;
     const site = siteKey(r);
     if (!site) return;
-    const row = add(site, d);
+
+    // Cancelled bookings don't consume CM capacity — tracked but excluded from load.
+    const isCancelled = r._type !== 'space' && /cancel/i.test(String(r.status || ''));
+
+    // Multi-day records (end_date after start) load every weekday they span (capped at 14 days).
+    const spanDates = [d];
+    if (r.end_date && typeof r.end_date === 'string' && r.end_date > d) {
+      for (let i = 1; i <= 13; i++) {
+        const nd = dateAdd(d, i);
+        if (nd > r.end_date) break;
+        const dow = new Date(nd + 'T12:00:00').getDay();
+        if (dow !== 0 && dow !== 6) spanDates.push(nd);
+      }
+    }
+
+    spanDates.forEach(dd => {
+    const row = add(site, dd);
+    if (isCancelled) { row.cancelled += 1; return; }
 
     const mult = r._multiplier || 1; // VIP/Traveler multiplier set during validation
-    if (r._type === 'meeting') {
+    if (r._type === 'meeting' && r._isEventFlag) {
+      // Binder rows flagged Event=TRUE are real events — weight them accordingly.
+      row.events += 1;
+      row.vip += hasVip(r) ? mult : 0;
+      row.attendees += (r.attendees || 0);
+      if (hasCatering(r)) row.catering += 1;
+    } else if (r._type === 'meeting') {
       row.meetings += 1;
       row.vip += hasVip(r) ? mult : 0;
       row.attendees += (r.attendees || 0);
@@ -1919,15 +2105,11 @@ function buildSiteDayStats(records) {
       row.attendees += (r.attendees || 0);
       if (hasCatering(r)) row.catering += 1;
     } else if (r._type === 'traveler') {
-      row.travelers += mult;
+      if (travelerIsVpPlus(r)) row.travelers += mult;
     } else {
       // space reservations intentionally excluded from capacity load in this model
     }
-    // Apply manager effort override: compute delta vs default weight and accumulate
-    if (r._type !== 'space') {
-      const rid = recordId(r);
-// (effort override removed)
-    }
+    });
   });
 
   // compute load + utilization
@@ -1957,12 +2139,6 @@ function buildSiteDayStats(records) {
   });
 
   // overrides needing adjacent day context
-  const dateAdd = (s, n) => {
-    const d = new Date(s + 'T12:00:00');
-    d.setDate(d.getDate() + n);
-    return fmtDate(d.toISOString());
-  };
-
   Object.keys(stats).forEach(site => {
     Object.keys(stats[site]).forEach(date => {
       const row = stats[site][date];
@@ -2009,6 +2185,7 @@ function topDrivers(row) {
   if (row.travelers) d.push(`${row.travelers.toFixed(row.travelers % 1 ? 1 : 0)} VP+ Traveler${row.travelers===1?'':'s'}`);
   if (row.flags.backToBackEvents) d.push('back-to-back events');
   if (row.flags.highMeetings) d.push('high meeting volume');
+  if (row.cancelled) d.push(`${row.cancelled} cancelled (excluded from load)`);
   return d.length ? d.join(' · ') : '—';
 }
 
@@ -2262,10 +2439,23 @@ function updateSubtitle() {
       `<span style="display:inline-flex;align-items:center;gap:6px;background:#EDE9FE;color:#4338CA;border-radius:14px;padding:3px 10px;font-weight:600;margin-right:6px">${p.label}: ${p.vals.join(', ')}</span>`
     ).join('');
   }
+  const ss = state.skipStats || {};
+  const unresolvedTotal = Object.values(ss.unresolvedSite || {}).reduce((a, b) => a + b, 0);
+  const skipTip = [
+    unresolvedTotal ? `${unresolvedTotal.toLocaleString()} unmatched location` : '',
+    ss.statusExcluded ? `${ss.statusExcluded.toLocaleString()} excluded status` : '',
+    ss.exactDupes ? `${ss.exactDupes} duplicates` : '',
+    ss.eventDupes ? `${ss.eventDupes} event double-counts merged` : '',
+    (ss.dateAnomalies || []).length ? `${ss.dateAnomalies.length} implausible dates` : '',
+  ].filter(Boolean).join(' · ');
   const droppedHtml = state.filteredOutCount > 0
-    ? ` &nbsp;·&nbsp; <span style="color:#EF4444;font-weight:600">${state.filteredOutCount.toLocaleString()} rows skipped</span> <span style="color:#94A3B8">(unresolved location or excluded status)</span>`
+    ? ` &nbsp;·&nbsp; <span style="color:#EF4444;font-weight:600;cursor:help" title="${escapeHtml(skipTip)}">${state.filteredOutCount.toLocaleString()} rows skipped</span> <span style="color:#94A3B8">(hover for breakdown)</span>`
     : '';
-  el.innerHTML = baseText + pillsHtml + droppedHtml;
+  const lowKeepFiles = Object.entries(state.fileKeepStats || {}).filter(([n, s]) => s.total > 10 && s.kept < s.total * 0.1);
+  const fileWarnHtml = lowKeepFiles.length
+    ? ` &nbsp;·&nbsp; <span style="color:#B91C1C;font-weight:700" title="${escapeHtml(lowKeepFiles.map(([n, s]) => `${n}: ${s.kept}/${s.total} kept`).join(' · '))}">&#9888; ${lowKeepFiles.length} file${lowKeepFiles.length > 1 ? 's' : ''} mostly dropped</span>`
+    : '';
+  el.innerHTML = baseText + pillsHtml + droppedHtml + fileWarnHtml;
 }
 
 function countBy(recs, key) {
@@ -3467,6 +3657,19 @@ function renderOverview(recs) {
               </div>
               <div class="text-muted" style="margin-top:6px">Utilization = Load ÷ Capacity</div>
             </div>
+            <div>
+              <div class="filter-label" style="margin-bottom:8px">VIP Counting</div>
+              <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#374151;cursor:pointer">
+                <input type="checkbox" ${MODEL.hostNamesAreVips ? 'checked' : ''} onchange="setModel('hostNamesAreVips', this.checked ? 1 : 0)" style="margin-top:2px">
+                <span>Count every "VIP/Meeting Host" name as a VIP</span>
+              </label>
+              <div class="text-muted" style="margin-top:6px">Off (recommended): a host name only counts as a VIP when the SLT column confirms it or the name carries an executive title (VP, Chief, Dr., President…). On: legacy behavior — any non-blank name counts as a VIP.</div>
+            </div>
+            <div>
+              <div class="filter-label" style="margin-bottom:8px">VP+ Traveler Level</div>
+              <input type="number" min="0" max="50" step="5" value="${MODEL.travVpMinLevel}" onchange="setModel('travVpMinLevel', this.value)" style="width:72px">
+              <div class="text-muted" style="margin-top:6px">Minimum "Manager Level" for a traveler to count toward CM load (travelers without level data always count). Cancelled meetings and events are always excluded from load.</div>
+            </div>
           </div>
         </div>
 
@@ -3570,11 +3773,61 @@ function renderOverview(recs) {
           </div>
         </div>
 
+        ${calibrationTableHtml()}
+
       </div>
     </div>
   `;
 
 }
+// Backtest the current model against historical data: per-site utilization
+// distribution and risk-day counts over the trailing 90 days. Helps calibrate
+// thresholds against reality instead of guessing.
+function calibrationStats() {
+  const stats = buildSiteDayStats(state.records);
+  const today = todayStr(), start = addDays(today, -90);
+  const siteNames = REF() ? REF().sites.map(s => s.siteName) : Object.keys(stats);
+  return siteNames.map(site => {
+    const rows = Object.values(stats[site] || {}).filter(r => r.date >= start && r.date < today);
+    if (!rows.length) return { site, days: 0, p50: 0, p90: 0, high: 0, elevated: 0 };
+    const utils = rows.map(r => r.util).sort((a, b) => a - b);
+    const q = p => utils[Math.min(utils.length - 1, Math.floor(p * utils.length))];
+    return {
+      site, days: rows.length, p50: q(0.5), p90: q(0.9),
+      high: rows.filter(r => r.flags.status === 'high').length,
+      elevated: rows.filter(r => r.flags.status === 'elevated').length,
+    };
+  });
+}
+
+function calibrationTableHtml() {
+  const cal = calibrationStats().filter(c => c.days > 0);
+  if (!cal.length) return '';
+  const rows = cal.map((c, i) => `<tr style="background:${i % 2 === 0 ? '#FAFAFA' : '#FFF'}">
+    <td style="padding:4px 8px;color:#1E293B;font-weight:500">${escapeHtml(c.site)}</td>
+    <td style="padding:4px 8px;text-align:right;color:#475569">${c.days}</td>
+    <td style="padding:4px 8px;text-align:right;color:#475569">${Math.round(c.p50 * 100)}%</td>
+    <td style="padding:4px 8px;text-align:right;color:#475569">${Math.round(c.p90 * 100)}%</td>
+    <td style="padding:4px 8px;text-align:right;color:${c.elevated ? '#B45309' : '#94A3B8'}">${c.elevated}</td>
+    <td style="padding:4px 8px;text-align:right;font-weight:700;color:${c.high ? '#B91C1C' : '#94A3B8'}">${c.high}</td>
+  </tr>`).join('');
+  return `<div style="border-top:1px solid #F1F5F9;margin-top:4px;padding:16px">
+    <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Backtest — Trailing 90 Days</div>
+    <div class="text-muted" style="margin-bottom:10px">How the current weights and thresholds classify the last 90 days of actual data. If a site you know was overwhelmed shows no red days (or a quiet site shows many), adjust the model above.</div>
+    <table style="width:100%;max-width:640px;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="text-align:left;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Location</th>
+        <th style="text-align:right;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Active Days</th>
+        <th style="text-align:right;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Median Util</th>
+        <th style="text-align:right;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">P90 Util</th>
+        <th style="text-align:right;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Amber Days</th>
+        <th style="text-align:right;padding:4px 8px;color:#64748B;font-weight:600;border-bottom:1px solid #E2E8F0">Red Days</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
 function nextNDayDigest(recs, n) {
   const today = todayStr();
   const days = Array.from({length:n},(_,i)=>addDays(today,i));
@@ -3629,7 +3882,23 @@ function fmtMoney(n) {
   if (n >= 1000) return `$${(n/1000).toFixed(n>=100000?0:1)}K`;
   return `$${Math.round(n).toLocaleString()}`;
 }
-function hasVip(r) { const v = String(r.vip || '').trim(); return !!(v && !/^(no|n|false|0|n\/a|na|none|tbd|cm|-)$/i.test(v) && v !== '—'); }
+function sltAffirmative(r) {
+  const s = String(r.slt || '').trim();
+  return !!(s && !/^(no|n|false|0|n\/a|na|none|tbd|-)$/i.test(s) && s !== '—');
+}
+function isExecTitleLike(v) {
+  return /\b(dr\.?|vp|svp|evp|avp|chief|ceo|cfo|coo|cio|cto|president|officer|executive|exec|slt)\b/i.test(v);
+}
+function hasVip(r) {
+  const v = String(r.vip || '').trim();
+  const hasVal = !!(v && !/^(no|n|false|0|n\/a|na|none|tbd|cm|-)$/i.test(v) && v !== '—');
+  if (!hasVal) return sltAffirmative(r);
+  // Dual-purpose "VIP/Meeting Host" columns hold the host's name on most rows.
+  // A name alone isn't a VIP signal unless corroborated by the SLT column or an
+  // executive title — unless legacy counting is explicitly enabled in Model Settings.
+  if (r._vipFromHostCol && !MODEL.hostNamesAreVips) return sltAffirmative(r) || isExecTitleLike(v);
+  return true;
+}
 function isCanceled(r) {
   const s = String(r.status || '').toLowerCase();
   return s.includes('cancel') || s.includes('postpone') || s.includes('declined');
